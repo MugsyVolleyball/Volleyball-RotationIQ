@@ -1,0 +1,563 @@
+HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VolleyIQ - Live Multi-User Collaborative Vault</title>
+    <!-- Include Firebase SDKs for Real-time Cloud Sync -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background: #25405d; 
+            color: #ffffff; 
+            margin: 0; 
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .dashboard-layout { display: grid; grid-template-columns: 1fr; gap: 15px; width: 100%; max-width: 1300px; }
+        .container { width: 100%; background: linear-gradient(180deg, #2b4c70 0%, #1e334a 100%); padding: 15px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); box-sizing: border-box; }
+        #setupScreen { padding: 10px; max-width: 450px; margin: 0 auto; }
+        .setup-group { margin-bottom: 15px; }
+        .roster-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+        .roster-label { flex: 1; font-size: 14px; font-weight: bold; color: #cbd5e0; }
+        .roster-input { width: 100px !important; padding: 8px !important; text-align: center; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; color: #cbd5e0; font-size: 14px; }
+        input[type="text"], select { width: 100%; padding: 12px; border: 1px solid #4a6b94; border-radius: 8px; box-sizing: border-box; font-size: 16px; background: #1a2f44; color: white; }
+        .btn-start { background: #e69500; color: white; border: none; padding: 15px; width:100%; border-radius: 8px; font-weight: bold; font-size: 18px; cursor: pointer; margin-top: 10px; }
+        #matchScreen { display: none; }
+        .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .perf-title { font-size: 20px; font-weight: bold; color: #ffffff; margin: 0; }
+        .top-badge { padding: 6px 12px; border-radius: 15px; font-size: 12px; font-weight: bold; border: 1px solid rgba(255,255,255,0.2); }
+        .badge-blue { background: rgba(255,255,255,0.15); }
+        .badge-orange { background: #e69500; border: none; }
+        .court-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 15px; }
+        .zone-box { background: rgba(255,255,255,0.06); border: 2px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 10px 4px; text-align: center; font-size: 11px; color: #e2e8f0; line-height: 1.4; }
+        .zone-title { font-size: 14px; font-weight: bold; color: #ff9d00; }
+        .role-title { font-size: 13px; font-weight: bold; color: #ffffff; margin: 4px 0; min-height: 18px; line-height: 1.2; }
+        .rv-text { font-weight: bold; font-size: 13px; margin: 3px 0; }
+        .rv-pos { color: #4ade80; }
+        .rv-neg { color: #f87171; }
+        .active-zone { border: 2px solid #e69500 !important; background: rgba(230, 149, 0, 0.25); }
+        .grid-footer-text { font-size: 11px; color: #a0aec0; text-align: center; margin-bottom: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .score-hub { display: grid; grid-template-columns: 1fr 1.4fr 1fr; align-items: center; gap: 10px; margin-bottom: 25px; }
+        .score-side { text-align: center; }
+        .score-side-label { font-size: 11px; color: #a0aec0; text-transform: uppercase; margin-bottom: 2px; }
+        .score-number { font-size: 40px; font-weight: bold; color: #ffffff; }
+        .real-count { font-size: 32px; font-weight: bold; color: #ffffff; margin-top: 2px; }
+        .scoring-btn { height: 85px; border: 3px solid transparent; border-radius: 14px; font-weight: bold; font-size: 16px; cursor: pointer; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px; text-align: center; transition: all 0.15s ease; }
+        .btn-receivers { background: #3182ce; }
+        .btn-servers { background: #e53e3e; }
+        .serving-active { border-color: #f6e05e !important; box-shadow: 0 0 18px rgba(246, 224, 94, 0.8); transform: scale(1.03); }
+        .actions-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .action-btn { padding: 12px 5px; border: none; border-radius: 12px; font-weight: bold; font-size: 12px; color: white; cursor: pointer; text-align: center; }
+        .btn-undo { background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%); }
+        .btn-next { background: linear-gradient(135deg, #3182ce 0%, #2b6cb0 100%); }
+        .btn-end { background: linear-gradient(135deg, #805ad5 0%, #6b46c1 100%); }
+        .dash-column { display: flex; flex-direction: column; gap: 15px; }
+        .history-panel { width: 100%; background: #1a2f44; border-radius: 15px; padding: 15px; box-sizing: border-box; border: 1px solid rgba(255,255,255,0.1); }
+        .history-title { font-size: 16px; font-weight: bold; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 5px; color: #ff9d00;}
+        .history-item { background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; }
+        .item-meta { display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 6px; border-bottom: 1px dashed rgba(255,255,255,0.15); padding-bottom: 4px;}
+        .mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 5px; }
+        .mini-box { background: rgba(0,0,0,0.25); border-radius: 6px; padding: 6px 4px; font-size: 10px; text-align: center; border: 1px solid rgba(255,255,255,0.05); line-height: 1.3; }
+        .summary-item { background: linear-gradient(135deg, #1e3a5f 0%, #112237 100%); border: 1px solid #ff9d00; border-radius: 10px; padding: 12px; margin-top: 15px; font-size: 13px; }
+        .btn-danger-action { background: transparent; border: 1px solid #f87171; color: #f87171; font-size: 11px; padding: 4px 8px; border-radius: 4px; cursor: pointer; float: right; margin-top: -32px; }
+        .sync-banner { background: #2f855a; color: white; padding: 8px; text-align: center; font-size: 12px; font-weight: bold; width: 100%; box-sizing: border-box; margin-bottom: 10px; border-radius: 5px; display: none;}
+        
+        @media (min-width: 900px) {
+            .dashboard-layout { grid-template-columns: 1.1fr 1.2fr 1.1fr; align-items: start; }
+            body { padding: 30px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="sync-banner" id="cloudSyncStatus">🔄 Connected to Live Cloud Database</div>
+
+<div class="dashboard-layout">
+    <div class="dash-column">
+        <div class="history-panel" id="liveVaultPanel" style="display:none;">
+            <div class="history-title" id="liveVaultTitle">Live Set Snapshot</div>
+            <div id="liveVaultContainer"></div>
+        </div>
+        <div class="history-panel" id="matchSetsPanel" style="display:none;">
+            <div class="history-title">⚔️ Completed Sets (This Match)</div>
+            <button class="btn-danger-action" style="border-color:#cbd5e0; color:#cbd5e0;" onclick="clearMatchSetsCloud()">Reset Match</button>
+            <div id="matchSetsContainer"></div>
+        </div>
+    </div>
+
+    <div class="dash-column">
+        <div class="container">
+            <!-- SETUP PANEL -->
+            <div id="setupScreen">
+                <h2 style="text-align:center; color:#fff; margin-top:5px;">VolleyIQ Cloud Setup</h2>
+                <div class="setup-group">
+                    <label>Our Team Name</label>
+                    <input type="text" id="teamName" value="US">
+                </div>
+                <div class="setup-group">
+                    <label>Opponent Team Name</label>
+                    <input type="text" id="oppName" value="THEM">
+                </div>
+                <div class="setup-group" style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                    <label style="color: #ff9d00; border-bottom: 1px dashed rgba(255,255,255,0.2); padding-bottom: 4px; margin-bottom: 10px;">Assign Names / Numbers</label>
+                    <div class="roster-row"><div class="roster-label">Setter</div><input type="text" id="name0" class="roster-input" placeholder="#5"></div>
+                    <div class="roster-row"><div class="roster-label">OH1</div><input type="text" id="name1" class="roster-input" placeholder="#12"></div>
+                    <div class="roster-row"><div class="roster-label">M1</div><input type="text" id="name2" class="roster-input" placeholder="#8"></div>
+                    <div class="roster-row"><div class="roster-label">Opposite</div><input type="text" id="name3" class="roster-input" placeholder="#2"></div>
+                    <div class="roster-row"><div class="roster-label">OH2</div><input type="text" id="name4" class="roster-input" placeholder="#7"></div>
+                    <div class="roster-row"><div class="roster-label">M2</div><input type="text" id="name5" class="roster-input" placeholder="#11"></div>
+                </div>
+                <div class="setup-group">
+                    <label>Which base position starts in the **I** (Serving) box?</label>
+                    <select id="startingPosition">
+                        <option value="0">Setter</option>
+                        <option value="1">Outside Hitter 1 (OH1)</option>
+                        <option value="2">Middle Blocker 1 (M1)</option>
+                        <option value="3">Opposite (Opp)</option>
+                        <option value="4">Outside Hitter 2 (OH2)</option>
+                        <option value="5">Middle Blocker 2 (M2)</option>
+                    </select>
+                </div>
+                <div class="setup-group">
+                    <label>Starting State</label>
+                    <select id="receiveFirst">
+                        <option value="true">We Receive First</option>
+                        <option value="false">We Serve First</option>
+                    </select>
+                </div>
+                <button class="btn-start" onclick="startMatchCloud()">Start / Sync Set</button>
+            </div>
+
+            <!-- MAIN TRACKING SCREEN -->
+            <div id="matchScreen">
+                <div class="header-row">
+                    <div class="perf-title" id="currentSetLabel">Set 1</div>
+                    <div class="top-badge badge-orange" id="liveLineupTracker">Lineup Tracker</div>
+                    <div class="top-badge badge-blue" style="cursor:pointer;" onclick="abortCurrentSetCloud()">Reset Set</div>
+                </div>
+                <div class="court-grid">
+                    <div class="zone-box" id="courtBoxIV"><div class="zone-title">IV</div><div class="role-title" id="roleIV">-</div><div class="rv-text" id="rvIV">+0.00 RV</div><div id="statsIV">PS: 0% | SO: 0%</div></div>
+                    <div class="zone-box" id="courtBoxIII"><div class="zone-title">III</div><div class="role-title" id="roleIII">-</div><div class="rv-text" id="rvIII">+0.00 RV</div><div id="statsIII">PS: 0% | SO: 0%</div></div>
+                    <div class="zone-box" id="courtBoxII"><div class="zone-title">II</div><div class="role-title" id="roleII">-</div><div class="rv-text" id="rvII">+0.00 RV</div><div id="statsII">PS: 0% | SO: 0%</div></div>
+                    <div class="zone-box" id="courtBoxV"><div class="zone-title">V</div><div class="role-title" id="roleV">-</div><div class="rv-text" id="rvV">+0.00 RV</div><div id="statsV">PS: 0% | SO: 0%</div></div>
+                    <div class="zone-box" id="courtBoxVI"><div class="zone-title">VI</div><div class="role-title" id="roleVI">-</div><div class="rv-text" id="rvVI">+0.00 RV</div><div id="statsVI">PS: 0% | SO: 0%</div></div>
+                    <div class="zone-box" id="courtBoxI"><div class="zone-title">I</div><div class="role-title" id="roleI">-</div><div class="rv-text" id="rvI">+0.00 RV</div><div id="statsI">PS: 0% | SO: 0%</div></div>
+                </div>
+                <div class="grid-footer-text">
+                    <div><strong>PS%</strong> = Serve Break Eff.<br><strong>SO%</strong> = Side-Out Eff.</div>
+                    <div><strong>Active Highlight</strong> = Current Server Spot</div>
+                </div>
+                <div class="score-hub">
+                    <div class="score-side">
+                        <div class="score-side-label">Score</div><div class="score-number" id="usScoreDisplay">0</div>
+                        <div class="score-side-label" style="margin-top:5px;">Real</div><div class="real-count" id="usRealDisplay">0</div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <button class="scoring-btn btn-receivers" id="btnUs" onclick="scoreRallyCloud(true)">US</button>
+                        <button class="scoring-btn btn-servers" id="btnThem" onclick="scoreRallyCloud(false)">THEM</button>
+                    </div>
+                    <div class="score-side">
+                        <div class="score-side-label">Score</div><div class="score-number" id="themScoreDisplay">0</div>
+                        <div class="score-side-label" style="margin-top:5px;">Real</div><div class="real-count" id="themRealDisplay">0</div>
+                    </div>
+                </div>
+                <div class="actions-row">
+                    <button class="action-btn btn-undo" onclick="undoRallyCloud()">Undo</button>
+                    <button class="action-btn btn-next" onclick="archiveAndNextSetCloud()">Next Set</button>
+                    <button class="action-btn btn-end" onclick="finishMatchCloud()">End Match</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="dash-column">
+        <div class="history-panel" id="seasonVaultPanel">
+            <div class="history-title">📊 Season Cumulative Averages</div>
+            <button class="btn-danger-action" onclick="clearSeasonHistoryCloud()">Wipe Season</button>
+            <div id="seasonVaultContainer"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+// =========================================================================
+// 🌐 STEP 1: PASTE YOUR FIREBASE CONFIG VALUES HERE
+// =========================================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyCAJ5f-m__-Ga-6MrE9R0_OhajQnJFSjew",
+  authDomain: "cghs-volleyball-rotationiq4.firebaseapp.com",
+  projectId: "cghs-volleyball-rotationiq4",
+  storageBucket: "cghs-volleyball-rotationiq4.firebasestorage.app",
+  messagingSenderId: "852667966081",
+  appId: "1:852667966081:web:5897dc32a5edd5c0baa380"
+};
+
+// Initialize Firebase Realtime Connection
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// Target Document paths for instant multi-device mirroring
+const liveSessionRef = db.collection("volleyIQ").doc("live_state");
+const seasonHistoryRef = db.collection("volleyIQ").doc("season_vault");
+
+let config = { teamName: "", oppName: "", startingOffset: 0, receiveFirst: true, customNames: [] };
+let rallyHistory = []; 
+let currentSetNumber = 1;
+let currentSetStatsRef = {};
+let matchSetsArray = []; 
+let matchFinished = false;
+
+const baseLineupOrder = ["Setter", "OH1", "M1", "Opp", "OH2", "M2"];
+const positionKeys = ["I", "II", "III", "IV", "V", "VI"];
+
+// Connect Live Cloud Streams on Launch
+window.onload = function() {
+    document.getElementById('cloudSyncStatus').style.display = 'block';
+    
+    // Listen to real-time changes across all connected devices
+    liveSessionRef.onSnapshot(doc => {
+        if(doc.exists) {
+            const data = doc.data();
+            rallyHistory = data.rallyHistory || [];
+            config = data.config || config;
+            currentSetNumber = data.currentSetNumber || 1;
+            matchSetsArray = data.matchSetsArray || [];
+            matchFinished = data.matchFinished || false;
+            
+            if(data.isActive) {
+                showMatchUI();
+                recalculateState(false); // Calculate but do not re-write loops
+            } else {
+                showSetupUI();
+            }
+            renderMatchSetsReview();
+        }
+    });
+
+    seasonHistoryRef.onSnapshot(doc => {
+        if(doc.exists) {
+            renderSeasonVault(doc.data());
+        } else {
+            renderSeasonVault(null);
+        }
+    });
+};
+
+function showMatchUI() {
+    document.getElementById('setupScreen').style.display = 'none';
+    document.getElementById('matchScreen').style.display = 'block';
+    document.getElementById('liveVaultPanel').style.display = 'block';
+    document.getElementById('matchSetsPanel').style.display = matchSetsArray.length > 0 ? 'block' : 'none';
+}
+
+function showSetupUI() {
+    document.getElementById('setupScreen').style.display = 'block';
+    document.getElementById('matchScreen').style.display = 'none';
+    document.getElementById('liveVaultPanel').style.display = 'none';
+}
+
+function startMatchCloud() {
+    config.teamName = document.getElementById('teamName').value;
+    config.oppName = document.getElementById('oppName').value;
+    config.startingOffset = parseInt(document.getElementById('startingPosition').value);
+    config.receiveFirst = document.getElementById('receiveFirst').value === 'true';
+    
+    config.customNames = [];
+    for(let i = 0; i < 6; i++) {
+        let val = document.getElementById(`name${i}`).value.trim();
+        config.customNames.push(val !== "" ? val : "");
+    }
+
+    liveSessionRef.set({
+        isActive: true,
+        config: config,
+        rallyHistory: [],
+        currentSetNumber: currentSetNumber,
+        matchSetsArray: matchSetsArray,
+        matchFinished: false
+    });
+}
+
+function scoreRallyCloud(usWon) {
+    rallyHistory.push(usWon);
+    pushStateToCloud();
+}
+
+function undoRallyCloud() {
+    if (rallyHistory.length > 0) {
+        rallyHistory.pop();
+        pushStateToCloud();
+    }
+}
+
+function pushStateToCloud() {
+    liveSessionRef.update({
+        rallyHistory: rallyHistory,
+        matchFinished: matchFinished
+    });
+}
+
+function recalculateState(writeToCloud = false) {
+    let score = { us: 0, them: 0 };
+    let realPoints = { us: 0, them: 0 };
+    let rotationsCount = 0; 
+    let weAreServing = !config.receiveFirst;
+
+    document.getElementById('btnUs').innerText = config.teamName;
+    document.getElementById('btnThem').innerText = config.oppName;
+    document.getElementById('currentSetLabel').innerText = `Set ${currentSetNumber}`;
+    document.getElementById('liveVaultTitle').innerText = `Live Set ${currentSetNumber} Performance`;
+
+    let stats = {};
+    for(let i = 0; i < 6; i++) {
+        stats[i] = { receivingAttempts: 0, successfulSideOuts: 0, servingTurns: 0, realPointsScored: 0 };
+    }
+    if (weAreServing) { stats[0].servingTurns++; }
+
+    rallyHistory.forEach(usWon => {
+        let activeIdx = rotationsCount % 6;
+        if (usWon) {
+            score.us++;
+            if (!weAreServing) {
+                stats[activeIdx].receivingAttempts++;
+                stats[activeIdx].successfulSideOuts++;
+                rotationsCount++;
+                weAreServing = true;
+                stats[rotationsCount % 6].servingTurns++;
+            } else {
+                stats[activeIdx].realPointsScored++;
+                realPoints.us++;
+            }
+        } else {
+            score.them++;
+            if (weAreServing) { 
+                weAreServing = false; 
+            } else { 
+                stats[activeIdx].receivingAttempts++; 
+                realPoints.them++; 
+            }
+        }
+    });
+
+    if (weAreServing) {
+        document.getElementById('btnUs').className = 'scoring-btn btn-receivers serving-active';
+        document.getElementById('btnUs').innerHTML = `${config.teamName}<br><span style='font-size:20px;'>🏐</span>`;
+        document.getElementById('btnThem').className = 'scoring-btn btn-servers';
+        document.getElementById('btnThem').innerText = config.oppName;
+    } else {
+        document.getElementById('btnThem').className = 'scoring-btn btn-servers serving-active';
+        document.getElementById('btnThem').innerHTML = `${config.oppName}<br><span style='font-size:20px;'>🏐</span>`;
+        document.getElementById('btnUs').className = 'scoring-btn btn-receivers';
+        document.getElementById('btnUs').innerText = config.teamName;
+    }
+
+    document.getElementById('usScoreDisplay').innerText = score.us;
+    document.getElementById('themScoreDisplay').innerText = score.them;
+    document.getElementById('usRealDisplay').innerText = realPoints.us;
+    document.getElementById('themRealDisplay').innerText = realPoints.them;
+
+    positionKeys.forEach(k => document.getElementById(`courtBox${k}`).classList.remove('active-zone'));
+    currentSetStatsRef = { setNum: currentSetNumber, scoreLine: `${score.us} - ${score.them}`, mapping: {} };
+
+    for (let i = 0; i < 6; i++) {
+        let roleIndex = (i + config.startingOffset) % 6;
+        let baseRole = baseLineupOrder[roleIndex];
+        let customVal = config.customNames[roleIndex];
+        let displayName = customVal !== "" ? `${baseRole} (${customVal})` : baseRole;
+
+        let currentPositionIndex = (i - rotationsCount) % 6;
+        if (currentPositionIndex < 0) currentPositionIndex += 6;
+        let currentBoxKey = positionKeys[currentPositionIndex];
+
+        let s = stats[i];
+        let soPct = s.receivingAttempts > 0 ? ((s.successfulSideOuts / s.receivingAttempts) * 100).toFixed(0) : '0';
+        let psPct = s.servingTurns > 0 ? ((s.realPointsScored / s.servingTurns) * 100).toFixed(0) : '0';
+        let netValue = s.realPointsScored - (s.receivingAttempts - s.successfulSideOuts);
+        let netSign = netValue >= 0 ? `+${netValue}` : `${netValue}`;
+
+        document.getElementById(`role${currentBoxKey}`).innerText = displayName;
+        document.getElementById(`rv${currentBoxKey}`).innerText = `${netSign} RV`;
+        document.getElementById(`rv${currentBoxKey}`).className = `rv-text ${netValue >= 0 ? 'rv-pos' : 'rv-neg'}`;
+        document.getElementById(`stats${currentBoxKey}`).innerText = `PS: ${psPct}% | SO: ${soPct}%`;
+
+        if (i === (rotationsCount % 6)) {
+            document.getElementById(`courtBox${currentBoxKey}`).classList.add('active-zone');
+        }
+
+        currentSetStatsRef.mapping[positionKeys[roleIndex]] = {
+            name: displayName,
+            receivingAttempts: s.receivingAttempts,
+            successfulSideOuts: s.successfulSideOuts,
+            servingTurns: s.servingTurns,
+            realPointsScored: s.realPointsScored,
+            netValue: netValue,
+            netSign: netSign,
+            psPct: psPct,
+            soPct: soPct
+        };
+    }
+    renderLiveVault();
+}
+
+function renderLiveVault() {
+    const container = document.getElementById('liveVaultContainer');
+    let gridHTML = `<div class="mini-grid">`;
+    const fixedOrder = ["IV", "III", "II", "V", "VI", "I"];
+    fixedOrder.forEach(k => {
+        let r = currentSetStatsRef.mapping[k];
+        if(r) {
+            let color = r.netValue >= 0 ? '#4ade80' : '#f87171';
+            gridHTML += `<div class="mini-box"><strong>Box ${k}</strong><br>${r.name}<br><span style="color:${color}">${r.netSign} RV</span><br>PS:${r.psPct}%|SO:${r.soPct}%</div>`;
+        }
+    });
+    gridHTML += `</div>`;
+    container.innerHTML = `<div class="history-item"><div class="item-meta"><span>Active Set Counts</span><span style="color:#ff9d00">${currentSetStatsRef.scoreLine}</span></div>${gridHTML}</div>`;
+}
+
+function archiveAndNextSetCloud() {
+    if (rallyHistory.length === 0) return;
+    
+    if (confirm(`Save Set ${currentSetNumber} into Cloud Match Log?`)) {
+        matchSetsArray.push(JSON.parse(JSON.stringify(currentSetStatsRef)));
+        
+        // Accumulate Season Cumulative stats inside database transaction safely
+        db.runTransaction(transaction => {
+            return transaction.get(seasonHistoryRef).then(resDoc => {
+                let sData = resDoc.exists ? resDoc.data() : { totalSets: 0, boxes: {} };
+                positionKeys.forEach(k => {
+                    if(!sData.boxes[k]) sData.boxes[k] = { receivingAttempts: 0, successfulSideOuts: 0, servingTurns: 0, realPointsScored: 0, netValue: 0 };
+                    let r = currentSetStatsRef.mapping[k];
+                    if(r) {
+                        sData.boxes[k].receivingAttempts += r.receivingAttempts;
+                        sData.boxes[k].successfulSideOuts += r.successfulSideOuts;
+                        sData.boxes[k].servingTurns += r.servingTurns;
+                        sData.boxes[k].realPointsScored += r.realPointsScored;
+                        sData.boxes[k].netValue += r.netValue;
+                    }
+                });
+                sData.totalSets += 1;
+                transaction.set(seasonHistoryRef, sData);
+            });
+        }).then(() => {
+            currentSetNumber++;
+            liveSessionRef.set({
+                isActive: false,
+                config: config,
+                rallyHistory: [],
+                currentSetNumber: currentSetNumber,
+                matchSetsArray: matchSetsArray,
+                matchFinished: false
+            });
+        });
+    }
+}
+
+function renderMatchSetsReview() {
+    const container = document.getElementById('matchSetsContainer');
+    if(matchSetsArray.length === 0) {
+        document.getElementById('matchSetsPanel').style.display = 'none';
+        return;
+    }
+    document.getElementById('matchSetsPanel').style.display = 'block';
+    container.innerHTML = "";
+    const fixedOrder = ["IV", "III", "II", "V", "VI", "I"];
+    
+    matchSetsArray.forEach(set => {
+        let gridHTML = `<div class="mini-grid">`;
+        fixedOrder.forEach(k => {
+            let r = set.mapping[k];
+            if(r) {
+                let color = r.netValue >= 0 ? '#4ade80' : '#f87171';
+                gridHTML += `<div class="mini-box"><strong>Box ${k}</strong><br>${r.name}<br><span style="color:${color}">${r.netSign} RV</span><br>PS:${r.psPct}%|SO:${r.soPct}%</div>`;
+            }
+        });
+        gridHTML += `</div>`;
+        container.innerHTML += `<div class="history-item"><div class="item-meta"><span>Set ${set.setNum} Breakdown</span><span style="color:#ff9d00">${set.scoreLine}</span></div>${gridHTML}</div>`;
+    });
+
+    if(matchFinished) {
+        let matchTotals = {};
+        positionKeys.forEach(k => { matchTotals[k] = { name: "Rotation "+k, receivingAttempts: 0, successfulSideOuts: 0, servingTurns: 0, realPointsScored: 0, netValue: 0 }; });
+
+        matchSetsArray.forEach(set => {
+            positionKeys.forEach(k => {
+                let r = set.mapping[k];
+                if(r) {
+                    matchTotals[k].name = r.name.split(" (")[0];
+                    matchTotals[k].receivingAttempts += r.receivingAttempts;
+                    matchTotals[k].successfulSideOuts += r.successfulSideOuts;
+                    matchTotals[k].servingTurns += r.servingTurns;
+                    matchTotals[k].realPointsScored += r.realPointsScored;
+                    matchTotals[k].netValue += r.netValue;
+                }
+            });
+        });
+
+        let summaryHTML = `<div class="summary-item"><div class="item-meta"><span style="color:#ff9d00; text-transform:uppercase;">🏆 Match Totals Matrix Summary</span><span>${matchSetsArray.length} Sets Aggregated</span></div><div class="mini-grid">`;
+        fixedOrder.forEach(k => {
+            let m = matchTotals[k];
+            let soPct = m.receivingAttempts > 0 ? ((m.successfulSideOuts / m.receivingAttempts) * 100).toFixed(0) : '0';
+            let psPct = m.servingTurns > 0 ? ((m.realPointsScored / m.servingTurns) * 100).toFixed(0) : '0';
+            let netSign = m.netValue >= 0 ? `+${m.netValue}` : `${m.netValue}`;
+            let color = m.netValue >= 0 ? '#4ade80' : '#f87171';
+            summaryHTML += `<div class="mini-box" style="background:rgba(255,157,0,0.08); border-color:rgba(255,157,0,0.3);"><strong style="color:#ff9d00;">Box ${k} Totals</strong><br>${m.name}<br><span style="color:${color}; font-weight:bold;">${netSign} RV</span><br>PS:${psPct}% | SO:${soPct}%</div>`;
+        });
+        summaryHTML += `</div></div>`;
+        container.innerHTML += summaryHTML;
+    }
+}
+
+function finishMatchCloud() {
+    if(matchSetsArray.length === 0 && rallyHistory.length === 0) return;
+    matchFinished = true;
+    liveSessionRef.update({ matchFinished: true });
+}
+
+function renderSeasonVault(seasonData) {
+    const container = document.getElementById('seasonVaultContainer');
+    if (!seasonData || seasonData.totalSets === 0) {
+        container.innerHTML = `<div style="color:#a0aec0; text-align:center; font-size:12px; padding:15px;">No cloud historical context database initialized yet.</div>`;
+        return;
+    }
+    let gridHTML = `<div class="mini-grid">`;
+    const fixedOrder = ["IV", "III", "II", "V", "VI", "I"];
+    fixedOrder.forEach(k => {
+        let b = seasonData.boxes[k] || { receivingAttempts: 0, successfulSideOuts: 0, servingTurns: 0, realPointsScored: 0, netValue: 0 };
+        let cumulativeSo = b.receivingAttempts > 0 ? ((b.successfulSideOuts / b.receivingAttempts) * 100).toFixed(0) : '0';
+        let cumulativePs = b.servingTurns > 0 ? ((b.realPointsScored / b.servingTurns) * 100).toFixed(0) : '0';
+        let netSign = b.netValue >= 0 ? `+${b.netValue}` : `${b.netValue}`;
+        let color = b.netValue >= 0 ? '#4ade80' : '#f87171';
+        let baseLabel = k === "I" ? "Setter" : k === "II" ? "OH1" : k === "III" ? "M1" : k === "IV" ? "Opp" : k === "V" ? "OH2" : "M2";
+        gridHTML += `<div class="mini-box"><strong>Box ${k}</strong><br>${baseLabel}<br><span style="color:${color}; font-weight:bold;">${netSign} RV</span><br>PS:${cumulativePs}%|SO:${cumulativeSo}%</div>`;
+    });
+    gridHTML += `</div>`;
+    container.innerHTML = `<div class="history-item"><div class="item-meta"><span>Aggregated Season Context</span><span style="color:#ff9d00">${seasonData.totalSets} Sets Total</span></div>${gridHTML}</div>`;
+}
+
+function clearMatchSetsCloud() {
+    if(confirm("Wipe match log array out of cloud session?")) {
+        liveSessionRef.update({ matchSetsArray: [], matchFinished: false });
+    }
+}
+
+function abortCurrentSetCloud() {
+    if(confirm("Reset current active tracking state?")) {
+        liveSessionRef.update({ isActive: false, rallyHistory: [] });
+    }
+}
+
+function clearSeasonHistoryCloud() {
+    if (confirm("🚨 Wipe entire seasonal cloud historical baseline table?")) {
+        seasonHistoryRef.delete();
+    }
+}
+</script>
+</body>
+</html>
