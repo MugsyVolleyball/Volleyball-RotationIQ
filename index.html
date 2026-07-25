@@ -4,8 +4,8 @@ HTML
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VolleyIQ - Live Multi-User Collaborative Vault</title>
-    <!-- Include Firebase SDKs for Real-time Cloud Sync -->
+    <title>VolleyIQ - CGHS Multi-Team Isolated Tracker</title>
+    <!-- Include Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <style>
@@ -65,10 +65,14 @@ HTML
         .item-meta { display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 6px; border-bottom: 1px dashed rgba(255,255,255,0.15); padding-bottom: 4px;}
         .mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 5px; }
         .mini-box { background: rgba(0,0,0,0.25); border-radius: 6px; padding: 6px 4px; font-size: 10px; text-align: center; border: 1px solid rgba(255,255,255,0.05); line-height: 1.3; }
-        .summary-item { background: linear-gradient(135deg, #1e3a5f 0%, #112237 100%); border: 1px solid #ff9d00; border-radius: 10px; padding: 12px; margin-top: 15px; font-size: 13px; }
         .btn-danger-action { background: transparent; border: 1px solid #f87171; color: #f87171; font-size: 11px; padding: 4px 8px; border-radius: 4px; cursor: pointer; float: right; margin-top: -32px; }
         .sync-banner { background: #2f855a; color: white; padding: 8px; text-align: center; font-size: 12px; font-weight: bold; width: 100%; box-sizing: border-box; margin-bottom: 10px; border-radius: 5px; display: none;}
         
+        .archive-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+        .archive-header { padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; font-size: 13px; font-weight: bold; background: rgba(255,255,255,0.03); }
+        .archive-header:hover { background: rgba(255,157,0,0.1); }
+        .archive-body { display: none; padding: 10px; border-top: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); }
+
         @media (min-width: 900px) {
             .dashboard-layout { grid-template-columns: 1.1fr 1.2fr 1.1fr; align-items: start; }
             body { padding: 30px; }
@@ -80,33 +84,43 @@ HTML
 <div class="sync-banner" id="cloudSyncStatus">🔄 Connected to Live Cloud Database</div>
 
 <div class="dashboard-layout">
+    <!-- LEFT COLUMN: Active Match Sets -->
     <div class="dash-column">
+        <div class="history-panel" id="matchSetsPanel">
+            <div class="history-title" id="activeMatchSetsTitle">⚔️ Active Match Sets</div>
+            <button class="btn-danger-action" style="border-color:#cbd5e0; color:#cbd5e0;" onclick="clearMatchSetsCloud()">Reset Match</button>
+            <div id="matchSetsContainer"></div>
+        </div>
         <div class="history-panel" id="liveVaultPanel" style="display:none;">
             <div class="history-title" id="liveVaultTitle">Live Set Snapshot</div>
             <div id="liveVaultContainer"></div>
         </div>
-        <div class="history-panel" id="matchSetsPanel" style="display:none;">
-            <div class="history-title">⚔️ Completed Sets (This Match)</div>
-            <button class="btn-danger-action" style="border-color:#cbd5e0; color:#cbd5e0;" onclick="clearMatchSetsCloud()">Reset Match</button>
-            <div id="matchSetsContainer"></div>
-        </div>
     </div>
 
+    <!-- CENTER COLUMN: Setup & Active Match Tracker -->
     <div class="dash-column">
         <div class="container">
             <!-- SETUP PANEL -->
             <div id="setupScreen">
-                <h2 style="text-align:center; color:#fff; margin-top:5px;">VolleyIQ Cloud Setup</h2>
-                <div class="setup-group">
-                    <label>Our Team Name</label>
-                    <input type="text" id="teamName" value="US">
+                <h2 style="text-align:center; color:#fff; margin-top:5px;" id="setupHeaderTitle">VolleyIQ Setup</h2>
+                
+                <div class="setup-group" style="background: rgba(230, 149, 0, 0.15); border: 1px solid #e69500; padding: 10px; border-radius: 8px;">
+                    <label style="color: #ff9d00;">Active Team Profile</label>
+                    <select id="teamSelector" onchange="switchTeamProfile()">
+                        <option value="CGHS Senior A">CGHS Senior A</option>
+                        <option value="CGHS Senior B">CGHS Senior B</option>
+                        <option value="CGHS Senior C">CGHS Senior C</option>
+                        <option value="CGHS Junior A">CGHS Junior A</option>
+                        <option value="NEW_TEAM">+ Add Custom Team Profile...</option>
+                    </select>
                 </div>
+
                 <div class="setup-group">
                     <label>Opponent Team Name</label>
                     <input type="text" id="oppName" value="THEM">
                 </div>
                 <div class="setup-group" style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
-                    <label style="color: #ff9d00; border-bottom: 1px dashed rgba(255,255,255,0.2); padding-bottom: 4px; margin-bottom: 10px;">Assign Names / Numbers</label>
+                    <label style="color: #ff9d00; border-bottom: 1px dashed rgba(255,255,255,0.2); padding-bottom: 4px; margin-bottom: 10px;" id="rosterLabel">Assign Names / Numbers</label>
                     <div class="roster-row"><div class="roster-label">Setter</div><input type="text" id="name0" class="roster-input" placeholder="#5"></div>
                     <div class="roster-row"><div class="roster-label">OH1</div><input type="text" id="name1" class="roster-input" placeholder="#12"></div>
                     <div class="roster-row"><div class="roster-label">M1</div><input type="text" id="name2" class="roster-input" placeholder="#8"></div>
@@ -132,15 +146,15 @@ HTML
                         <option value="false">We Serve First</option>
                     </select>
                 </div>
-                <button class="btn-start" onclick="startMatchCloud()">Start / Sync Set</button>
+                <button class="btn-start" id="startBtnLabel" onclick="startMatchCloud()">Start Set 1</button>
             </div>
 
             <!-- MAIN TRACKING SCREEN -->
             <div id="matchScreen">
                 <div class="header-row">
                     <div class="perf-title" id="currentSetLabel">Set 1</div>
-                    <div class="top-badge badge-orange" id="liveLineupTracker">Lineup Tracker</div>
-                    <div class="top-badge badge-blue" style="cursor:pointer;" onclick="abortCurrentSetCloud()">Reset Set</div>
+                    <div class="top-badge badge-orange" id="activeTeamBadge">Team</div>
+                    <div class="top-badge badge-blue" style="cursor:pointer;" onclick="abortCurrentSetCloud()">Exit to Setup</div>
                 </div>
                 <div class="court-grid">
                     <div class="zone-box" id="courtBoxIV"><div class="zone-title">IV</div><div class="role-title" id="roleIV">-</div><div class="rv-text" id="rvIV">+0.00 RV</div><div id="statsIV">PS: 0% | SO: 0%</div></div>
@@ -177,18 +191,24 @@ HTML
         </div>
     </div>
 
+    <!-- RIGHT COLUMN: Season Cumulative Averages & Compact Match Archive -->
     <div class="dash-column">
         <div class="history-panel" id="seasonVaultPanel">
-            <div class="history-title">📊 Season Cumulative Averages</div>
-            <button class="btn-danger-action" onclick="clearSeasonHistoryCloud()">Wipe Season</button>
+            <div class="history-title" id="seasonVaultTitle">📊 Season Averages</div>
+            <button class="btn-danger-action" onclick="clearSeasonHistoryCloud()">Wipe Team Baseline</button>
             <div id="seasonVaultContainer"></div>
+        </div>
+
+        <div class="history-panel">
+            <div class="history-title" id="archivePanelTitle">📂 Archived Match History</div>
+            <div id="archivedMatchesContainer"></div>
         </div>
     </div>
 </div>
 
 <script>
 // =========================================================================
-// 🌐 STEP 1: PASTE YOUR FIREBASE CONFIG VALUES HERE
+// FIREBASE INITIALIZATION
 // =========================================================================
 const firebaseConfig = {
   apiKey: "AIzaSyCAJ5f-m__-Ga-6MrE9R0_OhajQnJFSjew",
@@ -199,72 +219,169 @@ const firebaseConfig = {
   appId: "1:852667966081:web:5897dc32a5edd5c0baa380"
 };
 
-// Initialize Firebase Realtime Connection
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-// Target Document paths for instant multi-device mirroring
-const liveSessionRef = db.collection("volleyIQ").doc("live_state");
-const seasonHistoryRef = db.collection("volleyIQ").doc("season_vault");
+let activeTeamId = "CGHS Senior A"; 
+let liveSessionRef, seasonHistoryRef, matchHistoryRef;
+let liveUnsubscribe = null, seasonUnsubscribe = null, archiveUnsubscribe = null;
 
-let config = { teamName: "", oppName: "", startingOffset: 0, receiveFirst: true, customNames: [] };
+let config = { teamName: "CGHS Senior A", oppName: "THEM", startingOffset: 0, receiveFirst: true, customNames: ["", "", "", "", "", ""] };
 let rallyHistory = []; 
 let currentSetNumber = 1;
 let currentSetStatsRef = {};
 let matchSetsArray = []; 
-let matchFinished = false;
 
 const baseLineupOrder = ["Setter", "OH1", "M1", "Opp", "OH2", "M2"];
 const positionKeys = ["I", "II", "III", "IV", "V", "VI"];
 
-// Connect Live Cloud Streams on Launch
 window.onload = function() {
     document.getElementById('cloudSyncStatus').style.display = 'block';
+    loadSavedCustomTeams();
+    attachTeamCloudListeners(activeTeamId);
+};
+
+function loadSavedCustomTeams() {
+    const saved = localStorage.getItem("volleyIQ_custom_teams");
+    if(saved) {
+        const teams = JSON.parse(saved);
+        const select = document.getElementById('teamSelector');
+        teams.forEach(tName => {
+            let exists = Array.from(select.options).some(opt => opt.value === tName);
+            if(!exists) {
+                let opt = document.createElement('option');
+                opt.value = tName;
+                opt.innerText = tName;
+                select.insertBefore(opt, select.lastElementChild);
+            }
+        });
+    }
+}
+
+function saveCustomTeamToLocal(tName) {
+    let teams = [];
+    const saved = localStorage.getItem("volleyIQ_custom_teams");
+    if(saved) teams = JSON.parse(saved);
+    if(!teams.includes(tName)) {
+        teams.push(tName);
+        localStorage.setItem("volleyIQ_custom_teams", JSON.stringify(teams));
+    }
+}
+
+function switchTeamProfile() {
+    let select = document.getElementById('teamSelector');
+    let val = select.value;
+    if(val === "NEW_TEAM") {
+        let customName = prompt("Enter new CGHS team profile name (e.g., CGHS Junior B):");
+        if(customName && customName.trim() !== "") {
+            val = customName.trim();
+            let opt = document.createElement('option');
+            opt.value = val;
+            opt.innerText = val;
+            select.insertBefore(opt, select.lastElementChild);
+            select.value = val;
+            saveCustomTeamToLocal(val);
+        } else {
+            select.value = activeTeamId;
+            return;
+        }
+    }
     
-    // Listen to real-time changes across all connected devices
-    liveSessionRef.onSnapshot(doc => {
+    for(let i = 0; i < 6; i++) {
+        document.getElementById(`name${i}`).value = "";
+    }
+    
+    activeTeamId = val;
+    attachTeamCloudListeners(activeTeamId);
+}
+
+function attachTeamCloudListeners(teamId) {
+    if(liveUnsubscribe) liveUnsubscribe();
+    if(seasonUnsubscribe) seasonUnsubscribe();
+    if(archiveUnsubscribe) archiveUnsubscribe();
+
+    // Clean safe Firestore ID key
+    const dbKey = teamId.replace(/[^a-zA-Z0-9]/g, "_");
+
+    liveSessionRef = db.collection("volleyIQ_teams").doc(dbKey).collection("session").doc("live_state");
+    seasonHistoryRef = db.collection("volleyIQ_teams").doc(dbKey).collection("session").doc("season_vault");
+    matchHistoryRef = db.collection("volleyIQ_teams").doc(dbKey).collection("match_history");
+
+    document.getElementById('activeMatchSetsTitle').innerText = `⚔️ ${teamId} Active Match Sets`;
+    document.getElementById('archivePanelTitle').innerText = `📂 ${teamId} Match Archive`;
+
+    liveUnsubscribe = liveSessionRef.onSnapshot(doc => {
         if(doc.exists) {
             const data = doc.data();
             rallyHistory = data.rallyHistory || [];
-            config = data.config || config;
+            config = data.config || { teamName: teamId, oppName: "THEM", startingOffset: 0, receiveFirst: true, customNames: ["", "", "", "", "", ""] };
             currentSetNumber = data.currentSetNumber || 1;
             matchSetsArray = data.matchSetsArray || [];
-            matchFinished = data.matchFinished || false;
             
+            populateSetupFormFromConfig(config);
+            renderMatchSetsReview();
+
             if(data.isActive) {
                 showMatchUI();
-                recalculateState(false); // Calculate but do not re-write loops
+                recalculateState();
             } else {
                 showSetupUI();
             }
+        } else {
+            config = { teamName: teamId, oppName: "THEM", startingOffset: 0, receiveFirst: true, customNames: ["", "", "", "", "", ""] };
+            rallyHistory = [];
+            currentSetNumber = 1;
+            matchSetsArray = [];
+            populateSetupFormFromConfig(config);
             renderMatchSetsReview();
+            showSetupUI();
         }
     });
 
-    seasonHistoryRef.onSnapshot(doc => {
+    seasonUnsubscribe = seasonHistoryRef.onSnapshot(doc => {
+        document.getElementById('seasonVaultTitle').innerText = `📊 ${teamId} Season Averages`;
         if(doc.exists) {
             renderSeasonVault(doc.data());
         } else {
             renderSeasonVault(null);
         }
     });
-};
+
+    archiveUnsubscribe = matchHistoryRef.orderBy("timestamp", "desc").onSnapshot(snapshot => {
+        renderArchivedMatches(snapshot);
+    });
+}
+
+function populateSetupFormFromConfig(cfg) {
+    document.getElementById('oppName').value = cfg.oppName || "THEM";
+    document.getElementById('startingPosition').value = cfg.startingOffset || 0;
+    document.getElementById('receiveFirst').value = cfg.receiveFirst !== undefined ? String(cfg.receiveFirst) : "true";
+    document.getElementById('rosterLabel').innerText = `Assign Names / Numbers (${activeTeamId})`;
+    
+    let names = cfg.customNames || ["", "", "", "", "", ""];
+    for(let i = 0; i < 6; i++) {
+        document.getElementById(`name${i}`).value = names[i] || "";
+    }
+}
 
 function showMatchUI() {
     document.getElementById('setupScreen').style.display = 'none';
     document.getElementById('matchScreen').style.display = 'block';
     document.getElementById('liveVaultPanel').style.display = 'block';
-    document.getElementById('matchSetsPanel').style.display = matchSetsArray.length > 0 ? 'block' : 'none';
+    document.getElementById('activeTeamBadge').innerText = activeTeamId;
 }
 
 function showSetupUI() {
     document.getElementById('setupScreen').style.display = 'block';
     document.getElementById('matchScreen').style.display = 'none';
     document.getElementById('liveVaultPanel').style.display = 'none';
+    
+    document.getElementById('setupHeaderTitle').innerText = `${activeTeamId} Setup - Set ${currentSetNumber}`;
+    document.getElementById('startBtnLabel').innerText = `Start Set ${currentSetNumber}`;
 }
 
 function startMatchCloud() {
-    config.teamName = document.getElementById('teamName').value;
+    config.teamName = activeTeamId;
     config.oppName = document.getElementById('oppName').value;
     config.startingOffset = parseInt(document.getElementById('startingPosition').value);
     config.receiveFirst = document.getElementById('receiveFirst').value === 'true';
@@ -280,8 +397,7 @@ function startMatchCloud() {
         config: config,
         rallyHistory: [],
         currentSetNumber: currentSetNumber,
-        matchSetsArray: matchSetsArray,
-        matchFinished: false
+        matchSetsArray: matchSetsArray
     });
 }
 
@@ -299,12 +415,11 @@ function undoRallyCloud() {
 
 function pushStateToCloud() {
     liveSessionRef.update({
-        rallyHistory: rallyHistory,
-        matchFinished: matchFinished
+        rallyHistory: rallyHistory
     });
 }
 
-function recalculateState(writeToCloud = false) {
+function recalculateState() {
     let score = { us: 0, them: 0 };
     let realPoints = { us: 0, them: 0 };
     let rotationsCount = 0; 
@@ -313,7 +428,7 @@ function recalculateState(writeToCloud = false) {
     document.getElementById('btnUs').innerText = config.teamName;
     document.getElementById('btnThem').innerText = config.oppName;
     document.getElementById('currentSetLabel').innerText = `Set ${currentSetNumber}`;
-    document.getElementById('liveVaultTitle').innerText = `Live Set ${currentSetNumber} Performance`;
+    document.getElementById('liveVaultTitle').innerText = `Live Set ${currentSetNumber} Snapshot`;
 
     let stats = {};
     for(let i = 0; i < 6; i++) {
@@ -418,54 +533,90 @@ function renderLiveVault() {
         }
     });
     gridHTML += `</div>`;
-    container.innerHTML = `<div class="history-item"><div class="item-meta"><span>Active Set Counts</span><span style="color:#ff9d00">${currentSetStatsRef.scoreLine}</span></div>${gridHTML}</div>`;
+    container.innerHTML = `<div class="history-item"><div class="item-meta"><span>Active Set ${currentSetNumber} Live</span><span style="color:#ff9d00">${currentSetStatsRef.scoreLine}</span></div>${gridHTML}</div>`;
 }
 
 function archiveAndNextSetCloud() {
-    if (rallyHistory.length === 0) return;
+    if (rallyHistory.length === 0) {
+        alert("Please track at least one rally before finishing the set.");
+        return;
+    }
     
-    if (confirm(`Save Set ${currentSetNumber} into Cloud Match Log?`)) {
-        matchSetsArray.push(JSON.parse(JSON.stringify(currentSetStatsRef)));
-        
-        // Accumulate Season Cumulative stats inside database transaction safely
-        db.runTransaction(transaction => {
-            return transaction.get(seasonHistoryRef).then(resDoc => {
-                let sData = resDoc.exists ? resDoc.data() : { totalSets: 0, boxes: {} };
-                positionKeys.forEach(k => {
-                    if(!sData.boxes[k]) sData.boxes[k] = { receivingAttempts: 0, successfulSideOuts: 0, servingTurns: 0, realPointsScored: 0, netValue: 0 };
-                    let r = currentSetStatsRef.mapping[k];
-                    if(r) {
-                        sData.boxes[k].receivingAttempts += r.receivingAttempts;
-                        sData.boxes[k].successfulSideOuts += r.successfulSideOuts;
-                        sData.boxes[k].servingTurns += r.servingTurns;
-                        sData.boxes[k].realPointsScored += r.realPointsScored;
-                        sData.boxes[k].netValue += r.netValue;
-                    }
-                });
-                sData.totalSets += 1;
-                transaction.set(seasonHistoryRef, sData);
-            });
-        }).then(() => {
-            currentSetNumber++;
-            liveSessionRef.set({
-                isActive: false,
-                config: config,
-                rallyHistory: [],
-                currentSetNumber: currentSetNumber,
-                matchSetsArray: matchSetsArray,
-                matchFinished: false
-            });
+    let nextSetNum = currentSetNumber + 1;
+    if (confirm(`Save Set ${currentSetNumber} into Match Log and open setup for Set ${nextSetNum}?`)) {
+        let updatedMatchSets = [...matchSetsArray, JSON.parse(JSON.stringify(currentSetStatsRef))];
+        saveSetToSeasonBaseline();
+
+        liveSessionRef.set({
+            isActive: false,
+            config: config,
+            rallyHistory: [],
+            currentSetNumber: nextSetNum,
+            matchSetsArray: updatedMatchSets
         });
     }
 }
 
-function renderMatchSetsReview() {
-    const container = document.getElementById('matchSetsContainer');
-    if(matchSetsArray.length === 0) {
-        document.getElementById('matchSetsPanel').style.display = 'none';
+function finishMatchCloud() {
+    if (matchSetsArray.length === 0 && rallyHistory.length === 0) {
+        alert("No set data recorded yet for this match.");
         return;
     }
-    document.getElementById('matchSetsPanel').style.display = 'block';
+
+    if (confirm(`Finish match for ${activeTeamId}? This will end the active set, archive the complete match into historical logs, and clear the live board.`)) {
+        let updatedMatchSets = [...matchSetsArray];
+
+        if (rallyHistory.length > 0 && currentSetStatsRef.mapping) {
+            updatedMatchSets.push(JSON.parse(JSON.stringify(currentSetStatsRef)));
+            saveSetToSeasonBaseline();
+        }
+
+        const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        matchHistoryRef.add({
+            opponent: config.oppName || "Opponent",
+            date: dateStr,
+            timestamp: Date.now(),
+            sets: updatedMatchSets
+        });
+
+        liveSessionRef.set({ 
+            isActive: false,
+            config: config,
+            rallyHistory: [],
+            currentSetNumber: 1,
+            matchSetsArray: []
+        });
+    }
+}
+
+function saveSetToSeasonBaseline() {
+    db.runTransaction(transaction => {
+        return transaction.get(seasonHistoryRef).then(resDoc => {
+            let sData = resDoc.exists ? resDoc.data() : { totalSets: 0, boxes: {} };
+            positionKeys.forEach(k => {
+                if(!sData.boxes[k]) sData.boxes[k] = { receivingAttempts: 0, successfulSideOuts: 0, servingTurns: 0, realPointsScored: 0, netValue: 0 };
+                let r = currentSetStatsRef.mapping[k];
+                if(r) {
+                    sData.boxes[k].receivingAttempts += r.receivingAttempts;
+                    sData.boxes[k].successfulSideOuts += r.successfulSideOuts;
+                    sData.boxes[k].servingTurns += r.servingTurns;
+                    sData.boxes[k].realPointsScored += r.realPointsScored;
+                    sData.boxes[k].netValue += r.netValue;
+                }
+            });
+            sData.totalSets += 1;
+            transaction.set(seasonHistoryRef, sData);
+        });
+    });
+}
+
+function renderMatchSetsReview() {
+    const container = document.getElementById('matchSetsContainer');
+    if(!matchSetsArray || matchSetsArray.length === 0) {
+        container.innerHTML = `<div style="color:#a0aec0; text-align:center; font-size:12px; padding:10px;">No completed sets for ${activeTeamId}'s active match yet.</div>`;
+        return;
+    }
+    
     container.innerHTML = "";
     const fixedOrder = ["IV", "III", "II", "V", "VI", "I"];
     
@@ -479,14 +630,28 @@ function renderMatchSetsReview() {
             }
         });
         gridHTML += `</div>`;
-        container.innerHTML += `<div class="history-item"><div class="item-meta"><span>Set ${set.setNum} Breakdown</span><span style="color:#ff9d00">${set.scoreLine}</span></div>${gridHTML}</div>`;
+        container.innerHTML += `<div class="history-item"><div class="item-meta"><span>Set ${set.setNum} Final</span><span style="color:#ff9d00">${set.scoreLine}</span></div>${gridHTML}</div>`;
     });
+}
 
-    if(matchFinished) {
+function renderArchivedMatches(snapshot) {
+    const container = document.getElementById('archivedMatchesContainer');
+    if(snapshot.empty) {
+        container.innerHTML = `<div style="color:#a0aec0; text-align:center; font-size:12px; padding:10px;">No archived matches found for ${activeTeamId}.</div>`;
+        return;
+    }
+
+    let html = "";
+    const fixedOrder = ["IV", "III", "II", "V", "VI", "I"];
+
+    snapshot.docs.forEach(doc => {
+        const m = doc.data();
+        const docId = doc.id;
+        
         let matchTotals = {};
         positionKeys.forEach(k => { matchTotals[k] = { name: "Rotation "+k, receivingAttempts: 0, successfulSideOuts: 0, servingTurns: 0, realPointsScored: 0, netValue: 0 }; });
 
-        matchSetsArray.forEach(set => {
+        m.sets.forEach(set => {
             positionKeys.forEach(k => {
                 let r = set.mapping[k];
                 if(r) {
@@ -500,30 +665,66 @@ function renderMatchSetsReview() {
             });
         });
 
-        let summaryHTML = `<div class="summary-item"><div class="item-meta"><span style="color:#ff9d00; text-transform:uppercase;">🏆 Match Totals Matrix Summary</span><span>${matchSetsArray.length} Sets Aggregated</span></div><div class="mini-grid">`;
+        let summaryGrid = `<div class="mini-grid">`;
         fixedOrder.forEach(k => {
-            let m = matchTotals[k];
-            let soPct = m.receivingAttempts > 0 ? ((m.successfulSideOuts / m.receivingAttempts) * 100).toFixed(0) : '0';
-            let psPct = m.servingTurns > 0 ? ((m.realPointsScored / m.servingTurns) * 100).toFixed(0) : '0';
-            let netSign = m.netValue >= 0 ? `+${m.netValue}` : `${m.netValue}`;
-            let color = m.netValue >= 0 ? '#4ade80' : '#f87171';
-            summaryHTML += `<div class="mini-box" style="background:rgba(255,157,0,0.08); border-color:rgba(255,157,0,0.3);"><strong style="color:#ff9d00;">Box ${k} Totals</strong><br>${m.name}<br><span style="color:${color}; font-weight:bold;">${netSign} RV</span><br>PS:${psPct}% | SO:${soPct}%</div>`;
+            let mt = matchTotals[k];
+            let soPct = mt.receivingAttempts > 0 ? ((mt.successfulSideOuts / mt.receivingAttempts) * 100).toFixed(0) : '0';
+            let psPct = mt.servingTurns > 0 ? ((mt.realPointsScored / mt.servingTurns) * 100).toFixed(0) : '0';
+            let netSign = mt.netValue >= 0 ? `+${mt.netValue}` : `${mt.netValue}`;
+            let color = mt.netValue >= 0 ? '#4ade80' : '#f87171';
+            summaryGrid += `<div class="mini-box" style="background:rgba(255,157,0,0.08); border-color:rgba(255,157,0,0.3);"><strong style="color:#ff9d00;">Box ${k}</strong><br>${mt.name}<br><span style="color:${color}; font-weight:bold;">${netSign} RV</span><br>PS:${psPct}%|SO:${soPct}%</div>`;
         });
-        summaryHTML += `</div></div>`;
-        container.innerHTML += summaryHTML;
-    }
+        summaryGrid += `</div>`;
+
+        let setsHTML = "";
+        m.sets.forEach(set => {
+            let gridHTML = `<div class="mini-grid">`;
+            fixedOrder.forEach(k => {
+                let r = set.mapping[k];
+                if(r) {
+                    let color = r.netValue >= 0 ? '#4ade80' : '#f87171';
+                    gridHTML += `<div class="mini-box"><strong>Box ${k}</strong><br>${r.name}<br><span style="color:${color}">${r.netSign} RV</span><br>PS:${r.psPct}%|SO:${r.soPct}%</div>`;
+                }
+            });
+            gridHTML += `</div>`;
+            setsHTML += `<div class="history-item" style="margin-top:8px;"><div class="item-meta"><span>Set ${set.setNum}</span><span style="color:#ff9d00">${set.scoreLine}</span></div>${gridHTML}</div>`;
+        });
+
+        html += `
+            <div class="archive-card">
+                <div class="archive-header" onclick="toggleArchiveCard('${docId}')">
+                    <span>vs. ${m.opponent} (${m.sets.length} Sets)</span>
+                    <span style="color:#ff9d00; font-size:11px;">${m.date} ▾</span>
+                </div>
+                <div class="archive-body" id="archive_${docId}">
+                    <div style="font-weight:bold; color:#ff9d00; margin-bottom:5px; font-size:12px;">🏆 Match Aggregated Totals</div>
+                    ${summaryGrid}
+                    <div style="font-weight:bold; color:#cbd5e0; margin:10px 0 5px 0; font-size:12px;">Individual Sets</div>
+                    ${setsHTML}
+                    <button class="btn-danger-action" style="float:none; margin-top:10px; width:100%;" onclick="deleteArchivedMatch('${docId}')">Delete Match from Archive</button>
+                </div>
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
 }
 
-function finishMatchCloud() {
-    if(matchSetsArray.length === 0 && rallyHistory.length === 0) return;
-    matchFinished = true;
-    liveSessionRef.update({ matchFinished: true });
+function toggleArchiveCard(docId) {
+    const el = document.getElementById(`archive_${docId}`);
+    el.style.display = (el.style.display === "block") ? "none" : "block";
+}
+
+function deleteArchivedMatch(docId) {
+    if(confirm("Delete this match permanently from the archive?")) {
+        matchHistoryRef.doc(docId).delete();
+    }
 }
 
 function renderSeasonVault(seasonData) {
     const container = document.getElementById('seasonVaultContainer');
     if (!seasonData || seasonData.totalSets === 0) {
-        container.innerHTML = `<div style="color:#a0aec0; text-align:center; font-size:12px; padding:15px;">No cloud historical context database initialized yet.</div>`;
+        container.innerHTML = `<div style="color:#a0aec0; text-align:center; font-size:12px; padding:15px;">No season stats recorded for ${activeTeamId} yet.</div>`;
         return;
     }
     let gridHTML = `<div class="mini-grid">`;
@@ -538,23 +739,29 @@ function renderSeasonVault(seasonData) {
         gridHTML += `<div class="mini-box"><strong>Box ${k}</strong><br>${baseLabel}<br><span style="color:${color}; font-weight:bold;">${netSign} RV</span><br>PS:${cumulativePs}%|SO:${cumulativeSo}%</div>`;
     });
     gridHTML += `</div>`;
-    container.innerHTML = `<div class="history-item"><div class="item-meta"><span>Aggregated Season Context</span><span style="color:#ff9d00">${seasonData.totalSets} Sets Total</span></div>${gridHTML}</div>`;
+    container.innerHTML = `<div class="history-item"><div class="item-meta"><span>${activeTeamId} Season Baseline</span><span style="color:#ff9d00">${seasonData.totalSets} Sets Total</span></div>${gridHTML}</div>`;
 }
 
 function clearMatchSetsCloud() {
-    if(confirm("Wipe match log array out of cloud session?")) {
-        liveSessionRef.update({ matchSetsArray: [], matchFinished: false });
+    if(confirm(`Wipe current active match history for ${activeTeamId} and reset to Set 1?`)) {
+        currentSetNumber = 1;
+        matchSetsArray = [];
+        liveSessionRef.set({ 
+            matchSetsArray: [], 
+            currentSetNumber: 1,
+            rallyHistory: [],
+            isActive: false,
+            config: config
+        });
     }
 }
 
 function abortCurrentSetCloud() {
-    if(confirm("Reset current active tracking state?")) {
-        liveSessionRef.update({ isActive: false, rallyHistory: [] });
-    }
+    liveSessionRef.update({ isActive: false });
 }
 
 function clearSeasonHistoryCloud() {
-    if (confirm("🚨 Wipe entire seasonal cloud historical baseline table?")) {
+    if (confirm(`🚨 Wipe entire season baseline stats for ${activeTeamId}?`)) {
         seasonHistoryRef.delete();
     }
 }
