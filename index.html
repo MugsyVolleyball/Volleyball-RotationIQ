@@ -373,14 +373,29 @@ if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
         const auth = firebase.auth();
         const provider = new firebase.auth.GoogleAuthProvider();
 
-        // Check login status & prompt Google login if signed out
+        // Handle redirect result after logging in on iOS
+        auth.getRedirectResult().then((result) => {
+          if (result.user) {
+            console.log("Logged in as:", result.user.email);
+          }
+        }).catch((err) => {
+          console.error("Auth redirect error:", err);
+        });
+
+        // Function to trigger Google Login via redirect
+        window.loginWithGoogle = function() {
+          auth.signInWithRedirect(provider);
+        };
+
+        // Check login status
         auth.onAuthStateChanged((user) => {
+          const syncBanner = document.getElementById("cloudSyncStatus");
           if (user) {
             console.log("Logged in as:", user.email);
+            if (syncBanner) syncBanner.innerText = "Logged in as: " + user.email;
           } else {
-            auth.signInWithPopup(provider)
-              .then((result) => console.log("Logged in as:", result.user.email))
-              .catch((err) => alert("Login required: " + err.message));
+            if (syncBanner) syncBanner.innerText = " Not logged in. Tap here to Sign In";
+            if (syncBanner) syncBanner.onclick = window.loginWithGoogle;
           }
         });
         dbHasFirebase = true;
