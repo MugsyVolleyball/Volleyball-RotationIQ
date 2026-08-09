@@ -355,12 +355,12 @@
 
 <script>
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    messagingSenderId: "YOUR_MESSAGING_ID",
-    appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyCsYJv3-...",
+    authDomain: "cghs-volleyball-rotationiq4.firebaseapp.com",
+    projectId: "cghs-volleyball-rotationiq4",
+    storageBucket: "cghs-volleyball-rotationiq4.firebasestorage.app",
+    messagingSenderId: "1098670414343",
+    appId: "1:1098670414343:web:..."
 };
 
 let dbHasFirebase = false;
@@ -368,9 +368,22 @@ if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
     try {
         firebase.initializeApp(firebaseConfig);
         var db = firebase.firestore();
+
+        // Simple Passcode Protection
+        const APP_PASSCODE = "CGHS2026"; 
+
+        let savedPasscode = localStorage.getItem("coachPasscode");
+        if (savedPasscode !== APP_PASSCODE) {
+            let entered = prompt("Enter Coach Passcode to access VolleyIQ:");
+            if (entered === APP_PASSCODE) {
+                localStorage.setItem("coachPasscode", entered);
+            } else {
+                alert("Incorrect passcode! Access restricted.");
+            }
+        }
+
         dbHasFirebase = true;
-    } catch(e) { console.warn("Local storage fallback active."); }
-}
+    } catch(e) { console.warn("Firebase initialization error:", e); }
 
 let activeTeamId = "CGHS Senior A"; 
 let liveSessionRef, seasonHistoryRef, matchHistoryRef;
