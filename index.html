@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VolleyIQ - CGHS Multi-Team Tracker</title>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <style>
         :root {
             --bg-dark: #25405d;
@@ -368,6 +369,20 @@ if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
     try {
         firebase.initializeApp(firebaseConfig);
         var db = firebase.firestore();
+        // Initialize Firebase Auth & Google Provider
+        const auth = firebase.auth();
+        const provider = new firebase.auth.GoogleAuthProvider();
+
+        // Check login status & prompt Google login if signed out
+        auth.onAuthStateChanged((user) => {
+          if (user) {
+            console.log("Logged in as:", user.email);
+          } else {
+            auth.signInWithPopup(provider)
+              .then((result) => console.log("Logged in as:", result.user.email))
+              .catch((err) => alert("Login required: " + err.message));
+          }
+        });
         dbHasFirebase = true;
     } catch(e) { console.warn("Local storage fallback active."); }
 }
