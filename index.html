@@ -362,31 +362,30 @@ const firebaseConfig = {
   storageBucket: "cghs-volleyball-rotationiq4.firebasestorage.app",
   messagingSenderId: "852667966081",
   appId: "1:852667966081:web:5897dc32a5edd5c0baa380"
-};
-
-let dbHasFirebase = false;
-if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
-    try {
-        firebase.initializeApp(firebaseConfig);
-        var db = firebase.firestore();
-        // Simple Passcode Protection (No Google Auth required)
-        const APP_PASSCODE = "cghs"; // Change this to your desired coach password!
-
-        let savedPasscode = localStorage.getItem("coachPasscode");
-        if (savedPasscode !== APP_PASSCODE) {
-            let entered = prompt("Enter Coach Passcode to access VolleyIQ:");
-            if (entered === APP_PASSCODE) {
-                localStorage.setItem("coachPasscode", entered);
-            } else {
-                alert("Incorrect passcode! Access restricted.");
+try {
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
             }
+            db = firebase.firestore();
+
+            try {
+            // Simple Passcode Protection
+            const APP_PASSCODE = "CGHS2026"; 
+
+            let savedPasscode = localStorage.getItem("coachPasscode");
+            if (savedPasscode !== APP_PASSCODE) {
+                let entered = prompt("Enter Coach Passcode to access VolleyIQ:");
+                if (entered === APP_PASSCODE) {
+                    localStorage.setItem("coachPasscode", entered);
+                } else {
+                    alert("Incorrect passcode! Access restricted.");
+                }
+            }
+
+            dbHasFirebase = true;
+        } catch(e) { 
+            console.warn("Local storage fallback active:", e); 
         }
-        
-        dbHasFirebase = true;
-    } catch(e) { console.warn("Local storage fallback active."); }
-
-
-let activeTeamId = "CGHS Senior A"; 
 let liveSessionRef, seasonHistoryRef, matchHistoryRef;
 let liveUnsubscribe = null, seasonUnsubscribe = null, archiveUnsubscribe = null;
 
