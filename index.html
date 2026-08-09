@@ -355,12 +355,12 @@
 
 <script>
 const firebaseConfig = {
-    apiKey: "AIzaSyCAJ5f-m__-Ga-6MrE9R0_OhajQnJFSjew",
-    authDomain: "cghs-volleyball-rotationiq4.firebaseapp.com",
-    projectId: "cghs-volleyball-rotationiq4",
-    storageBucket: "cghs-volleyball-rotationiq4.firebasestorage.app",
-    messagingSenderId: "852667966081",
-    appId: "1:852667966081:web:5897dc32a5edd5c0baa380"
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT_ID.appspot.com",
+    messagingSenderId: "YOUR_MESSAGING_ID",
+    appId: "YOUR_APP_ID"
 };
 
 let dbHasFirebase = false;
@@ -554,13 +554,887 @@ function selectPlayerChip(pName) {
 function updateSlotHighlights() {
     for(let i = 0; i < 6; i++) {
         let slotEl = document.getElementById(`slot_${i}`);
-        if(slotEl) {
-            if(selectedPlayerForAssignment) {
-                slotEl.classList.add('target-active');
+        if(selectedPlayerForAssignment) {
+            slotEl.classList.add('target-active');
+        } else {
+            slotEl.classList.remove('target-active');
+        }
+    }
+}
+
+function assignSelectedToSlot(slotIndex) {
+    if(selectedPlayerForAssignment) {
+        let existingIdx = startingSlots.indexOf(selectedPlayerForAssignment);
+        if(existingIdx !== -1) startingSlots[existingIdx] = "";
+        
+        startingSlots[slotIndex] = selectedPlayerForAssignment;
+        selectedPlayerForAssignment = null;
+    } else {
+        startingSlots[slotIndex] = "";
+    }
+    renderSlotsUI();
+    renderMasterRosterChips();
+    updateSlotHighlights();
+}
+
+function renderSlotsUI() {
+    for(let i = 0; i < 6; i++) {
+        let slotEl = document.getElementById(`slot_${i}`);
+        let nameEl = document.getElementById(`slotName_${i}`);
+        let pName = startingSlots[i];
+        
+        if(pName && pName !== "") {
+            slotEl.classList.add('filled');
+            nameEl.innerText = pName;
+        } else {
+            slotEl.classList.remove('filled');
+            nameEl.innerText = "Tap to Place";
+        }
+    }
+}
+
+function attachTeamCloudListeners(teamId) {
+    if(liveUnsubscribe) liveUnsubscribe();
+    if(seasonUnsubscribe) seasonUnsubscribe();
+    if(archiveUnsubscribe) archiveUnsubscribe();
+
+    document.getElementById('activeTeamBadge').innerText = teamId;
+    document.getElementById('setupHeaderTitle').innerText = `${teamId} Setup`;
+    
+    loadMasterRoster();
+    renderSlotsUI();
+
+    if(!dbHasFirebase) {
+        loadLocalStorageState();
+        return;
+    }
+
+    liveSessionRef = db.collection('teams').doc(teamId).collection('live').doc('currentMatch');
+    seasonHistoryRef = db.collection('teams').doc(teamId).collection('history').doc('seasonVault');
+    matchHistoryRef = db.collection('teams').doc(teamId).collection('matchArchive');
+
+    liveUnsubscribe = liveSessionRef.onSnapshot(doc => {
+        if(doc.exists) {
+            let data = doc.data();
+            config = data.config || config;
+            rallyHistory = data.rallyHistory || [];
+            currentSetNumber = data.currentSetNumber || 1;
+            matchSetsArray = data.matchSetsArray || [];
+            playerPasses = data.playerPasses || {};
+            
+            if(data.isLive) {
+                document.getElementById('setupScreen').style.display = 'none';
+                document.getElementById('matchScreen').style.display = 'block';
+                updateMatchTrackerView();
             } else {
-                slotEl.classList.remove('target-active');
+                document.getElementById('setupScreen').style.display = 'block';
+                document.getElementById('matchScreen').style.display = 'none';
+                document.getElementById('startBtnLabel').innerText = `Start Set ${currentSetNumber}`;
+            }
+            renderMatchSetsPanel();
+            renderReceiversDrawer();
+        } else {
+            document.getElementById('setupScreen').style.display = 'block';
+            document.getElementById('matchScreen').style.display = 'none';
+            matchSetsArray = [];
+            renderMatchSetsPanel();
+        }
+    });
+
+    seasonUnsubscribe = seasonHistoryRef.onSnapshot(doc => {
+        let data = doc.exists ? doc.data() : {};
+        renderSeasonVaultPanel(data);
+    });
+
+    archiveUnsubscribe = matchHistoryRef.orderBy('timestamp', 'desc').onSnapshot(snapshot => {
+        let docs = [];
+        snapshot.forEach(d => docs.push({ id: d.id, ...d.data() }));
+        renderMatchArchivePanel(docs);
+    });
+}
+
+function loadLocalStorageState() {
+    let liveData = localStorage.getItem(`volleyIQ_live_${activeTeamId}`);
+    if(liveData) {
+        let data = JSON.parse(liveData);
+        config = data.config || config;
+        rallyHistory = data.rallyHistory || [];
+        currentSetNumber = data.currentSetNumber || 1;
+        matchSetsArray = data.matchSetsArray || [];
+        playerPasses = data.playerPasses || {};
+        
+        if(data.isLive) {
+            document.getElementById('setupScreen').style.display = 'none';
+            document.getElementById('matchScreen').style.display = 'block';
+            updateMatchTrackerView();
+        } else {
+            document.getElementById('setupScreen').style.display = 'block';
+            document.getElementById('matchScreen').style.display = 'none';
+            document.getElementById('startBtnLabel').innerText = `Start Set ${currentSetNumber}`;
+        }
+    } else {
+        document.getElementById('setupScreen').style.display = 'block';
+        document.getElementById('matchScreen').style.display = 'none';
+        matchSetsArray = [];
+    }
+    renderMatchSetsPanel();
+    renderReceiversDrawer();
+
+    let seasonData = localStorage.getItem(`volleyIQ_season_${activeTeamId}`);
+    renderSeasonVaultPanel(seasonData ? JSON.parse(seasonData) : {});
+
+    let archiveData = localStorage.getItem(`volleyIQ_archive_${activeTeamId}`);
+    renderMatchArchivePanel(archiveData ? JSON.parse(archiveData) : []);
+}
+
+function saveLocalStorageLive(isLive = true) {
+    let data = {
+        config: config,
+        rallyHistory: rallyHistory,
+        currentSetNumber: currentSetNumber,
+        matchSetsArray: matchSetsArray,
+        playerPasses: playerPasses,
+        isLive: isLive
+    };
+    localStorage.setItem(`volleyIQ_live_${activeTeamId}`, JSON.stringify(data));
+}
+
+function startMatchCloud() {
+    config.teamName = activeTeamId;
+    config.oppName = document.getElementById('oppName').value.trim() || "THEM";
+    config.startingOffset = parseInt(document.getElementById('startingPosition').value);
+    config.receiveFirst = (document.getElementById('receiveFirst').value === "true");
+    
+    config.customNames = startingSlots.map((val, idx) => val !== "" ? val : baseLineupOrder[idx]);
+    config.bench = masterRoster.filter(pName => !startingSlots.includes(pName));
+    
+    rallyHistory = [];
+
+    let payload = {
+        config: config,
+        rallyHistory: [],
+        currentSetNumber: currentSetNumber,
+        matchSetsArray: matchSetsArray,
+        playerPasses: playerPasses,
+        isLive: true,
+        updatedAt: firebase.firestore.FieldValue ? firebase.firestore.FieldValue.serverTimestamp() : new Date()
+    };
+
+    if(dbHasFirebase) {
+        liveSessionRef.set(payload);
+    } else {
+        saveLocalStorageLive(true);
+        attachTeamCloudListeners(activeTeamId);
+    }
+}
+
+function scoreRallyCloud(weScored) {
+    let rallyState = getRallyStateAtStep(rallyHistory.length);
+    let usScore = rallyState.usScore;
+    let themScore = rallyState.themScore;
+    let weAreServing = rallyState.weAreServing;
+
+    let realUsChange = 0;
+    let realThemChange = 0;
+
+    if (weAreServing) {
+        if (weScored) realUsChange = +1;
+        else realUsChange = -1;
+    } else {
+        if (!weScored) realThemChange = +1;
+        else realThemChange = -1;
+    }
+
+    if (weScored) usScore++;
+    else themScore++;
+
+    let rallyRecord = {
+        weScored: weScored,
+        servingRoleIdx: rallyState.servingRoleIdx,
+        servingZone: rallyState.servingZone,
+        weAreServing: weAreServing,
+        realUsChange: realUsChange,
+        realThemChange: realThemChange
+    };
+
+    rallyHistory.push(rallyRecord);
+    syncLiveRallyHistory();
+}
+
+function undoRallyCloud() {
+    if(rallyHistory.length > 0) {
+        rallyHistory.pop();
+        syncLiveRallyHistory();
+    }
+}
+
+function syncLiveRallyHistory() {
+    if(dbHasFirebase) {
+        liveSessionRef.update({ rallyHistory: rallyHistory });
+    } else {
+        saveLocalStorageLive(true);
+        updateMatchTrackerView();
+    }
+}
+
+function promptSubPlayer(zoneLabel) {
+    let rotation = getCurrentRotationState();
+    let roleIdx = rotation[zoneLabel];
+    activeSubRoleIndex = roleIdx;
+    
+    let currentName = config.customNames[roleIdx] || baseLineupOrder[roleIdx];
+    document.getElementById('subModalTitle').innerText = `Substitute Position ${zoneLabel}`;
+    document.getElementById('subModalCurrent').innerText = `Current Player: ${currentName}`;
+    
+    let benchContainer = document.getElementById('benchListContainer');
+    benchContainer.innerHTML = "";
+    
+    let currentInUse = config.customNames.filter(n => n && n.trim() !== "");
+    let availableBench = masterRoster.filter(p => !currentInUse.includes(p));
+    
+    if(availableBench.length === 0) {
+        benchContainer.innerHTML = `<div style="font-size:12px; color:var(--text-dim); text-align:center; padding:10px;">No master roster bench players remaining.</div>`;
+    } else {
+        availableBench.forEach(benchPlayer => {
+            let item = document.createElement('div');
+            item.className = 'bench-item';
+            item.innerHTML = `<span style="font-weight:bold; font-size:13px;">${benchPlayer}</span><span style="font-size:11px; color:var(--accent-gold);">Sub In ➔</span>`;
+            item.onclick = function() { executeSub(benchPlayer); };
+            benchContainer.appendChild(item);
+        });
+    }
+    
+    document.getElementById('customSubInput').value = "";
+    document.getElementById('subModal').style.display = 'flex';
+}
+
+function closeSubModal() {
+    document.getElementById('subModal').style.display = 'none';
+    activeSubRoleIndex = null;
+}
+
+function executeSub(newPlayerName) {
+    if(activeSubRoleIndex === null) return;
+    config.customNames[activeSubRoleIndex] = newPlayerName;
+    
+    if(dbHasFirebase) {
+        liveSessionRef.update({ config: config });
+    } else {
+        saveLocalStorageLive(true);
+        updateMatchTrackerView();
+    }
+    closeSubModal();
+}
+
+function executeCustomSub() {
+    let inputVal = document.getElementById('customSubInput').value.trim();
+    if(inputVal !== "") {
+        executeSub(inputVal);
+    }
+}
+
+function toggleDrawer() {
+    document.getElementById('sideDrawer').classList.toggle('open');
+}
+
+function renderReceiversDrawer() {
+    const container = document.getElementById('receiversList');
+    container.innerHTML = "";
+
+    let currentActivePlayers = config.customNames.filter(n => n && n.trim() !== "");
+    let allRosterPlayers = Array.from(new Set([...currentActivePlayers, ...masterRoster]));
+
+    allRosterPlayers.forEach(pName => {
+        let stats = playerPasses[pName] || { scores: [], sum: 0, count: 0, avg: 0.0 };
+        let card = document.createElement('div');
+        card.className = "receiver-card";
+
+        card.innerHTML = `
+            <div class="receiver-header">
+                <span class="receiver-name">${pName}</span>
+                <span class="receiver-stats">Passes: ${stats.count} | Avg: <strong style="color:var(--accent-gold);">${stats.avg ? stats.avg.toFixed(2) : "0.00"}</strong></span>
+            </div>
+            <div class="rating-bar">
+                <button class="btn-sr sr-0" onclick="logPassRating('${pName}', 0)">0</button>
+                <button class="btn-sr sr-1" onclick="logPassRating('${pName}', 1)">1</button>
+                <button class="btn-sr sr-2" onclick="logPassRating('${pName}', 2)">2</button>
+                <button class="btn-sr sr-3" onclick="logPassRating('${pName}', 3)">3</button>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+}
+
+function logPassRating(playerName, score) {
+    if(!playerPasses[playerName]) {
+        playerPasses[playerName] = { scores: [], sum: 0, count: 0, avg: 0.0 };
+    }
+    let p = playerPasses[playerName];
+    p.scores.push(score);
+    p.sum += score;
+    p.count += 1;
+    p.avg = p.sum / p.count;
+
+    if(dbHasFirebase) {
+        liveSessionRef.update({ playerPasses: playerPasses });
+    } else {
+        saveLocalStorageLive(true);
+        renderReceiversDrawer();
+        updateMatchTrackerView();
+    }
+}
+
+function getRallyStateAtStep(stepCount) {
+    let usScore = 0;
+    let themScore = 0;
+    let rotationIndex = 0;
+    let weAreServing = !config.receiveFirst;
+
+    for (let i = 0; i < stepCount; i++) {
+        let r = rallyHistory[i];
+        if (r.weScored) usScore++;
+        else themScore++;
+
+        if (i < stepCount - 1) {
+            let nextRally = rallyHistory[i + 1];
+            if (nextRally.weAreServing && !weAreServing) {
+                rotationIndex = (rotationIndex + 1) % 6;
+            }
+            weAreServing = nextRally.weAreServing;
+        }
+    }
+
+    if (stepCount > 0) {
+        let lastRally = rallyHistory[stepCount - 1];
+        if (lastRally.weScored && !lastRally.weAreServing) {
+            rotationIndex = (rotationIndex + 1) % 6;
+            weAreServing = true;
+        } else if (!lastRally.weScored && lastRally.weAreServing) {
+            weAreServing = false;
+        }
+    }
+
+    let currentServingRoleIdx = (config.startingOffset + rotationIndex) % 6;
+    let activeRotation = getRotationForIndex(rotationIndex);
+    let servingZone = "I";
+    
+    for (let z in activeRotation) {
+        if (activeRotation[z] === currentServingRoleIdx) servingZone = z;
+    }
+
+    return {
+        usScore: usScore,
+        themScore: themScore,
+        rotationIndex: rotationIndex,
+        weAreServing: weAreServing,
+        servingRoleIdx: currentServingRoleIdx,
+        servingZone: servingZone,
+        activeRotation: activeRotation
+    };
+}
+
+function getRotationForIndex(rIdx) {
+    let pos = {};
+    for (let i = 0; i < 6; i++) {
+        let roleIdx = (config.startingOffset + rIdx + i) % 6;
+        let zone = positionKeys[i];
+        pos[zone] = roleIdx;
+    }
+    return pos;
+}
+
+function getCurrentRotationState() {
+    let currentState = getRallyStateAtStep(rallyHistory.length);
+    return currentState.activeRotation;
+}
+
+function updateMatchTrackerView() {
+    let currentState = getRallyStateAtStep(rallyHistory.length);
+    
+    document.getElementById('currentSetLabel').innerText = `Set ${currentSetNumber}`;
+    document.getElementById('usScoreDisplay').innerText = currentState.usScore;
+    document.getElementById('themScoreDisplay').innerText = currentState.themScore;
+
+    let usReal = 0, themReal = 0;
+    let roleStats = Array(6).fill(null).map(() => ({
+        psAttempts: 0, psScored: 0,
+        soAttempts: 0, soScored: 0,
+        rvTotal: 0
+    }));
+
+    rallyHistory.forEach(r => {
+        if(r.realUsChange) usReal += r.realUsChange;
+        if(r.realThemChange) themReal += r.realThemChange;
+
+        let sRole = r.servingRoleIdx;
+        if (r.weAreServing) {
+            roleStats[sRole].psAttempts++;
+            if (r.weScored) {
+                roleStats[sRole].psScored++;
+                roleStats[sRole].rvTotal += 1;
+            } else {
+                roleStats[sRole].rvTotal -= 1;
+            }
+        } else {
+            roleStats[sRole].soAttempts++;
+            if (r.weScored) {
+                roleStats[sRole].soScored++;
+                roleStats[sRole].rvTotal += 1;
+            } else {
+                roleStats[sRole].rvTotal -= 1;
             }
         }
+    });
+
+    document.getElementById('usRealDisplay').innerText = (usReal >= 0 ? `+${usReal}` : `${usReal}`);
+    document.getElementById('themRealDisplay').innerText = (themReal >= 0 ? `+${themReal}` : `${themReal}`);
+
+    let btnUs = document.getElementById('btnUs');
+    let btnThem = document.getElementById('btnThem');
+    
+    if (currentState.weAreServing) {
+        btnUs.className = "scoring-btn btn-receivers serving-active";
+        btnThem.className = "scoring-btn btn-servers";
+        btnUs.innerHTML = `US<br><small style="font-size:10px;">(SERVING)</small>`;
+        btnThem.innerHTML = `THEM<br><small style="font-size:10px;">(RECEIVING)</small>`;
+    } else {
+        btnUs.className = "scoring-btn btn-receivers";
+        btnThem.className = "scoring-btn btn-servers serving-active";
+        btnUs.innerHTML = `US<br><small style="font-size:10px;">(RECEIVING)</small>`;
+        btnThem.innerHTML = `THEM<br><small style="font-size:10px;">(SERVING)</small>`;
+    }
+
+    currentSetStatsRef = {};
+    currentRoleStatsRef = {};
+
+    positionKeys.forEach(zone => {
+        let roleIdx = currentState.activeRotation[zone];
+        let roleName = baseLineupOrder[roleIdx];
+        let playerName = config.customNames[roleIdx] || roleName;
+        
+        let box = document.getElementById(`courtBox${zone}`);
+        let roleEl = document.getElementById(`role${zone}`);
+        let rvEl = document.getElementById(`rv${zone}`);
+        let statsEl = document.getElementById(`stats${zone}`);
+        let prEl = document.getElementById(`pr${zone}`);
+
+        if (currentState.weAreServing && zone === currentState.servingZone) {
+            box.classList.add('active-zone');
+        } else {
+            box.classList.remove('active-zone');
+        }
+
+        roleEl.innerText = `${roleName}\n(${playerName})`;
+
+        let st = roleStats[roleIdx];
+        let psPct = st.psAttempts > 0 ? Math.round((st.psScored / st.psAttempts) * 100) : 0;
+        let soPct = st.soAttempts > 0 ? Math.round((st.soScored / st.soAttempts) * 100) : 0;
+        
+        let rvVal = st.rvTotal;
+        rvEl.innerText = (rvVal >= 0 ? `+${rvVal}.00 RV` : `${rvVal}.00 RV`);
+        rvEl.className = `rv-text ${rvVal >= 0 ? 'rv-pos' : 'rv-neg'}`;
+
+        statsEl.innerText = `PS: ${psPct}% | SO: ${soPct}%`;
+
+        let pPass = playerPasses[playerName];
+        let passAvgStr = (pPass && pPass.count > 0) ? pPass.avg.toFixed(2) : "0.00";
+        prEl.innerText = `Pass PR: ${passAvgStr}`;
+
+        let snapshotObj = {
+            roleName: roleName,
+            playerName: playerName,
+            rv: rvVal,
+            psPct: psPct,
+            soPct: soPct,
+            passAvg: passAvgStr,
+            roleIdx: roleIdx
+        };
+
+        currentSetStatsRef[zone] = snapshotObj;
+        currentRoleStatsRef[roleIdx] = snapshotObj;
+    });
+
+    renderLiveVaultSnapshot(currentState, usReal, themReal);
+}
+
+// LIVE SNAPSHOT PANEL - FIXED BY PLAYER BOX/ROLE INDEX:
+// Top Row: OPP (4), M1 (3), OH1 (2)
+// Bottom Row: OH2 (5), M2 (6), Setter (1)
+function renderLiveVaultSnapshot(currentState, usReal, themReal) {
+    const container = document.getElementById('liveVaultContainer');
+    document.getElementById('liveVaultPanel').style.display = 'block';
+
+    let html = `
+        <div class="history-item" style="border-left: 4px solid var(--accent-gold);">
+            <div class="item-meta">
+                <span>Set ${currentSetNumber} vs ${config.oppName}</span>
+                <span>Score: ${currentState.usScore}-${currentState.themScore} (Real: ${usReal >= 0 ? '+'+usReal : usReal})</span>
+            </div>
+            <div class="mini-grid">
+    `;
+
+    fixedRoleDisplayOrder.forEach(item => {
+        let st = currentRoleStatsRef[item.roleIdx] || {};
+        html += `
+            <div class="mini-box">
+                <strong style="color:var(--accent-gold);">${item.roleLabel} (${item.boxLabel})</strong><br>
+                ${st.playerName || '-'}<br>
+                <span style="color:${(st.rv||0)>=0?'var(--accent-green)':'var(--accent-red)'}">${st.rv>=0?'+':''}${st.rv||0} RV</span><br>
+                PR: ${st.passAvg || "0.00"}
+            </div>
+        `;
+    });
+
+    html += `</div></div>`;
+    container.innerHTML = html;
+}
+
+function archiveAndNextSetCloud() {
+    if(rallyHistory.length === 0) {
+        alert("Cannot archive an empty set. Score some rallies first!");
+        return;
+    }
+
+    let currentState = getRallyStateAtStep(rallyHistory.length);
+    let usReal = 0, themReal = 0;
+    rallyHistory.forEach(r => {
+        if(r.realUsChange) usReal += r.realUsChange;
+        if(r.realThemChange) themReal += r.realThemChange;
+    });
+
+    let setRecord = {
+        setNumber: currentSetNumber,
+        oppName: config.oppName,
+        usScore: currentState.usScore,
+        themScore: currentState.themScore,
+        usReal: usReal,
+        themReal: themReal,
+        zoneSnapshot: JSON.parse(JSON.stringify(currentSetStatsRef)),
+        roleSnapshot: JSON.parse(JSON.stringify(currentRoleStatsRef)),
+        rallyHistory: [...rallyHistory]
+    };
+
+    matchSetsArray.push(setRecord);
+    currentSetNumber++;
+    rallyHistory = [];
+
+    if(dbHasFirebase) {
+        liveSessionRef.update({
+            currentSetNumber: currentSetNumber,
+            matchSetsArray: matchSetsArray,
+            rallyHistory: [],
+            isLive: false
+        });
+    } else {
+        saveLocalStorageLive(false);
+        attachTeamCloudListeners(activeTeamId);
+    }
+}
+
+function finishMatchCloud() {
+    if(rallyHistory.length > 0) {
+        if(confirm("Save current live set before ending match?")) {
+            archiveAndNextSetCloud();
+        }
+    }
+
+    if(matchSetsArray.length === 0) {
+        alert("No sets recorded for this match.");
+        return;
+    }
+
+    let totalUsSets = matchSetsArray.filter(s => s.usScore > s.themScore).length;
+    let totalThemSets = matchSetsArray.filter(s => s.themScore > s.usScore).length;
+
+    let matchRoleTotals = {};
+    for (let i = 0; i < 6; i++) {
+        matchRoleTotals[i] = {
+            rv: 0,
+            playerName: "",
+            passAvgSum: 0,
+            passCount: 0
+        };
+    }
+
+    matchSetsArray.forEach(setItem => {
+        let snap = setItem.roleSnapshot || setItem.zoneSnapshot;
+        for(let key in snap) {
+            let rData = snap[key];
+            let rIdx = rData.roleIdx !== undefined ? rData.roleIdx : key;
+            if(!matchRoleTotals[rIdx]) continue;
+
+            matchRoleTotals[rIdx].rv += rData.rv || 0;
+            if(rData.playerName) matchRoleTotals[rIdx].playerName = rData.playerName;
+            
+            if(rData.passAvg && parseFloat(rData.passAvg) > 0) {
+                matchRoleTotals[rIdx].passAvgSum += parseFloat(rData.passAvg);
+                matchRoleTotals[rIdx].passCount += 1;
+            }
+        }
+    });
+
+    for(let rIdx in matchRoleTotals) {
+        let rot = matchRoleTotals[rIdx];
+        rot.finalPR = rot.passCount > 0 ? (rot.passAvgSum / rot.passCount).toFixed(2) : "0.00";
+    }
+
+    let matchDoc = {
+        teamName: activeTeamId,
+        oppName: config.oppName,
+        timestamp: new Date().toISOString(),
+        finalSetResult: `${totalUsSets} - ${totalThemSets}`,
+        matchRoleTotals: matchRoleTotals,
+        sets: matchSetsArray,
+        playerPasses: playerPasses
+    };
+
+    if(dbHasFirebase) {
+        matchHistoryRef.add(matchDoc).then(() => {
+            updateSeasonVaultCumulative(matchSetsArray);
+            clearMatchSetsCloud();
+        });
+    } else {
+        let archive = JSON.parse(localStorage.getItem(`volleyIQ_archive_${activeTeamId}`) || "[]");
+        archive.unshift(matchDoc);
+        localStorage.setItem(`volleyIQ_archive_${activeTeamId}`, JSON.stringify(archive));
+        updateSeasonVaultCumulative(matchSetsArray);
+        clearMatchSetsCloud();
+    }
+}
+
+function clearMatchSetsCloud() {
+    matchSetsArray = [];
+    rallyHistory = [];
+    currentSetNumber = 1;
+    playerPasses = {};
+
+    if(dbHasFirebase) {
+        liveSessionRef.set({
+            config: config,
+            rallyHistory: [],
+            currentSetNumber: 1,
+            matchSetsArray: [],
+            playerPasses: {},
+            isLive: false
+        });
+    } else {
+        localStorage.removeItem(`volleyIQ_live_${activeTeamId}`);
+        attachTeamCloudListeners(activeTeamId);
+    }
+}
+
+function abortCurrentSetCloud() {
+    if(confirm("Return to setup screen? Current set score will be paused.")) {
+        if(dbHasFirebase) {
+            liveSessionRef.update({ isLive: false });
+        } else {
+            saveLocalStorageLive(false);
+            attachTeamCloudListeners(activeTeamId);
+        }
+    }
+}
+
+function updateSeasonVaultCumulative(newSetsArray) {
+    let vault = {};
+    if(!dbHasFirebase) {
+        vault = JSON.parse(localStorage.getItem(`volleyIQ_season_${activeTeamId}`) || "{}");
+    }
+
+    let processAndSave = (currentVault) => {
+        let playerStats = currentVault.playerStats || {};
+
+        newSetsArray.forEach(setItem => {
+            let snap = setItem.roleSnapshot || setItem.zoneSnapshot;
+            for(let key in snap) {
+                let zData = snap[key];
+                let pName = zData.playerName;
+                if(!pName || pName === "-") continue;
+
+                if(!playerStats[pName]) {
+                    playerStats[pName] = { totalRV: 0, setsPlayed: 0, sumPS: 0, sumSO: 0, passSum: 0, passCount: 0 };
+                }
+
+                playerStats[pName].totalRV += zData.rv || 0;
+                playerStats[pName].setsPlayed += 1;
+                playerStats[pName].sumPS += zData.psPct || 0;
+                playerStats[pName].sumSO += zData.soPct || 0;
+
+                if(zData.passAvg && parseFloat(zData.passAvg) > 0) {
+                    playerStats[pName].passSum += parseFloat(zData.passAvg);
+                    playerStats[pName].passCount += 1;
+                }
+            }
+        });
+
+        let updatedVault = {
+            lastUpdated: new Date().toISOString(),
+            totalSetsTracked: (currentVault.totalSetsTracked || 0) + newSetsArray.length,
+            playerStats: playerStats
+        };
+
+        if(dbHasFirebase) {
+            seasonHistoryRef.set(updatedVault);
+        } else {
+            localStorage.setItem(`volleyIQ_season_${activeTeamId}`, JSON.stringify(updatedVault));
+            renderSeasonVaultPanel(updatedVault);
+        }
+    };
+
+    if(dbHasFirebase) {
+        seasonHistoryRef.get().then(doc => {
+            processAndSave(doc.exists ? doc.data() : {});
+        });
+    } else {
+        processAndSave(vault);
+    }
+}
+
+function clearSeasonHistoryCloud() {
+    if(confirm(`Wipe all season baseline statistics for ${activeTeamId}?`)) {
+        if(dbHasFirebase) {
+            seasonHistoryRef.delete();
+        } else {
+            localStorage.removeItem(`volleyIQ_season_${activeTeamId}`);
+            renderSeasonVaultPanel({});
+        }
+    }
+}
+
+function renderMatchSetsPanel() {
+    const container = document.getElementById('matchSetsContainer');
+    container.innerHTML = "";
+
+    if(matchSetsArray.length === 0) {
+        container.innerHTML = `<div style="font-size:12px; color:var(--text-dim); text-align:center; padding:10px;">No sets completed in this match yet.</div>`;
+        return;
+    }
+
+    matchSetsArray.forEach(setItem => {
+        let card = document.createElement('div');
+        card.className = "history-item";
+        card.style.borderLeft = "4px solid var(--accent-green)";
+
+        let html = `
+            <div class="item-meta">
+                <span>Set ${setItem.setNumber} vs ${setItem.oppName}</span>
+                <span>Score: ${setItem.usScore}-${setItem.themScore} (${setItem.usReal >= 0 ? '+'+setItem.usReal : setItem.usReal})</span>
+            </div>
+            <div class="mini-grid">
+        `;
+
+        fixedRoleDisplayOrder.forEach(item => {
+            let snap = setItem.roleSnapshot || setItem.zoneSnapshot || {};
+            let st = snap[item.roleIdx] || snap[item.boxLabel] || {};
+            html += `
+                <div class="mini-box">
+                    <strong style="color:var(--accent-gold);">${item.roleLabel} (${item.boxLabel})</strong><br>
+                    ${st.playerName || '-'}<br>
+                    <span style="color:${(st.rv||0)>=0?'var(--accent-green)':'var(--accent-red)'}">${st.rv>=0?'+':''}${st.rv||0} RV</span><br>
+                    PR: ${st.passAvg || "0.00"}
+                </div>
+            `;
+        });
+
+        html += `</div>`;
+        card.innerHTML = html;
+        container.appendChild(card);
+    });
+}
+
+function renderSeasonVaultPanel(vaultData) {
+    const container = document.getElementById('seasonVaultContainer');
+    container.innerHTML = "";
+
+    let stats = vaultData.playerStats || {};
+    let players = Object.keys(stats);
+
+    if(players.length === 0) {
+        container.innerHTML = `<div style="font-size:12px; color:var(--text-dim); text-align:center; padding:10px;">No season baseline data accumulated yet.</div>`;
+        return;
+    }
+
+    players.sort((a,b) => stats[b].totalRV - stats[a].totalRV);
+
+    players.forEach(pName => {
+        let p = stats[pName];
+        let avgRV = (p.totalRV / p.setsPlayed).toFixed(2);
+        let avgPS = Math.round(p.sumPS / p.setsPlayed);
+        let avgSO = Math.round(p.sumSO / p.setsPlayed);
+        let passPR = p.passCount > 0 ? (p.passSum / p.passCount).toFixed(2) : "0.00";
+
+        let item = document.createElement('div');
+        item.className = "history-item";
+        item.innerHTML = `
+            <div class="item-meta">
+                <span style="color:var(--accent-gold);">${pName}</span>
+                <span>${p.setsPlayed} Sets Played</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:12px; margin-top:4px;">
+                <span>Total RV: <strong style="color:${p.totalRV>=0?'var(--accent-green)':'var(--accent-red)'}">${p.totalRV>=0?'+':''}${p.totalRV}</strong> (${avgRV}/set)</span>
+                <span>Pass PR: <strong style="color:var(--accent-gold);">${passPR}</strong></span>
+            </div>
+            <div style="font-size:11px; color:var(--text-dim); margin-top:2px;">
+                Avg PS: ${avgPS}% | Avg SO: ${avgSO}%
+            </div>
+        `;
+        container.appendChild(item);
+    });
+}
+
+// MATCH ARCHIVE RENDERER - FIXED BY PLAYER BOX/ROLE INDEX
+function renderMatchArchivePanel(archiveDocs) {
+    const container = document.getElementById('archivedMatchesContainer');
+    container.innerHTML = "";
+
+    if(archiveDocs.length === 0) {
+        container.innerHTML = `<div style="font-size:12px; color:var(--text-dim); text-align:center; padding:10px;">No archived matches found.</div>`;
+        return;
+    }
+
+    archiveDocs.forEach((match, idx) => {
+        let dateStr = new Date(match.timestamp).toLocaleDateString();
+        let card = document.createElement('div');
+        card.className = "archive-card";
+
+        let gridCardsHtml = "";
+        let totals = match.matchRoleTotals || match.matchRotationTotals || {};
+
+        fixedRoleDisplayOrder.forEach(item => {
+            let rot = totals[item.roleIdx] || totals[item.boxLabel] || { rv: 0, playerName: "-", finalPR: "0.00" };
+            let rvVal = rot.rv || 0;
+            let rvClass = rvVal >= 0 ? "rv-pos" : "rv-neg";
+            let pName = rot.playerName || "-";
+            let prVal = rot.finalPR || "0.00";
+
+            gridCardsHtml += `
+                <div class="archive-rot-card">
+                    <div class="archive-rot-title"><span style="color:var(--accent-gold);">${item.roleLabel} (${item.boxLabel}):</span> ${pName}</div>
+                    <div class="archive-rot-rv ${rvClass}">${rvVal >= 0 ? '+' : ''}${rvVal} RV</div>
+                    <div class="archive-rot-pr">PR: ${prVal}</div>
+                </div>
+            `;
+        });
+
+        card.innerHTML = `
+            <div class="archive-header" onclick="toggleArchiveBody(${idx})">
+                <span>vs ${match.oppName} (${dateStr})</span>
+                <span style="color:var(--accent-gold);">${match.finalSetResult} Sets ▾</span>
+            </div>
+            <div class="archive-body" id="archiveBody_${idx}">
+                <div style="font-size:11px; color:var(--text-dim); margin-bottom:6px; text-align:center; font-weight:bold;">Match Cumulative Box Performance</div>
+                <div class="archive-rotation-grid">
+                    ${gridCardsHtml}
+                </div>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+}
+
+function toggleArchiveBody(idx) {
+    let el = document.getElementById(`archiveBody_${idx}`);
+    if(el) {
+        el.style.display = (el.style.display === 'block') ? 'none' : 'block';
     }
 }
 </script>
