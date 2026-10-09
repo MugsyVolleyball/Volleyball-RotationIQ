@@ -1,1264 +1,206 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VolleyIQ - CGHS Multi-Team Tracker</title>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <style>
-        :root {
-            --bg-dark: #25405d;
-            --panel-bg: #1a2f44;
-            --card-bg: rgba(255, 255, 255, 0.06);
-            --card-border: rgba(255, 255, 255, 0.15);
-            --accent-gold: #ff9d00;
-            --accent-green: #4ade80;
-            --accent-red: #f87171;
-            --accent-blue: #3182ce;
-            --text-light: #ffffff;
-            --text-dim: #cbd5e0;
-        }
-
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-            background: var(--bg-dark); 
-            color: var(--text-light); 
-            margin: 0; 
-            padding: 15px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .sync-banner { 
-            background: #2f855a; 
-            color: white; 
-            padding: 8px; 
-            text-align: center; 
-            font-size: 12px; 
-            font-weight: bold; 
-            width: 100%; 
-            max-width: 1300px;
-            box-sizing: border-box; 
-            margin-bottom: 10px; 
-            border-radius: 5px; 
-        }
-
-        .dashboard-layout { display: grid; grid-template-columns: 1fr; gap: 15px; width: 100%; max-width: 1300px; }
-        .container { width: 100%; background: linear-gradient(180deg, #2b4c70 0%, #1e334a 100%); padding: 15px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); box-sizing: border-box; }
-        
-        #setupScreen { padding: 5px; max-width: 520px; margin: 0 auto; }
-        .setup-group { margin-bottom: 15px; }
-        label { display: block; font-weight: bold; margin-bottom: 5px; color: var(--text-dim); font-size: 14px; }
-        input[type="text"], select { width: 100%; padding: 12px; border: 1px solid #4a6b94; border-radius: 8px; box-sizing: border-box; font-size: 16px; background: #1a2f44; color: white; }
-        .btn-start { background: var(--accent-gold); color: white; border: none; padding: 15px; width:100%; border-radius: 8px; font-weight: bold; font-size: 18px; cursor: pointer; margin-top: 10px; }
-        
-        /* ROSTER CHIPS & DELETE BUTTON */
-        .roster-pool { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; border: 1px dashed rgba(255,255,255,0.2); min-height: 48px; }
-        
-        .player-chip { 
-            background: var(--panel-bg); 
-            border: 1px solid var(--accent-gold); 
-            color: white; 
-            padding: 6px 10px; 
-            border-radius: 16px; 
-            font-size: 13px; 
-            font-weight: bold; 
-            cursor: pointer; 
-            user-select: none; 
-            transition: transform 0.1s; 
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .player-chip:active { transform: scale(0.95); }
-        .player-chip.selected { background: var(--accent-gold); color: black; box-shadow: 0 0 10px var(--accent-gold); }
-
-        .chip-del-btn {
-            background: rgba(255, 255, 255, 0.2);
-            border: none;
-            color: #ffffff;
-            border-radius: 50%;
-            width: 18px;
-            height: 18px;
-            font-size: 12px;
-            font-weight: bold;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            line-height: 1;
-            padding: 0;
-        }
-        .chip-del-btn:hover {
-            background: var(--accent-red);
-            color: white;
-        }
-
-        /* 3x2 COURT SLOTS GRID MATCHING MATCH SCREEN */
-        .court-slots-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
-        .court-slot { background: rgba(255,255,255,0.05); border: 2px dashed rgba(255,255,255,0.2); border-radius: 8px; padding: 10px 4px; text-align: center; cursor: pointer; transition: all 0.15s ease; }
-        .court-slot.target-active { border-color: var(--accent-gold); background: rgba(255,157,0,0.15); animation: pulse 1s infinite alternate; }
-        .court-slot.filled { border-style: solid; border-color: #4ade80; background: rgba(74,222,128,0.1); }
-        .slot-title { font-size: 11px; color: var(--accent-gold); font-weight: bold; text-transform: uppercase; }
-        .slot-player { font-size: 13px; font-weight: bold; margin-top: 4px; color: #ffffff; min-height: 20px; word-break: break-word; }
-
-        @keyframes pulse { from { opacity: 0.7; } to { opacity: 1; } }
-
-        /* MATCH TRACKER UI */
-        #matchScreen { display: none; }
-        .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .perf-title { font-size: 20px; font-weight: bold; color: #ffffff; margin: 0; }
-        .top-badge { padding: 6px 12px; border-radius: 15px; font-size: 12px; font-weight: bold; border: 1px solid rgba(255,255,255,0.2); }
-        .badge-blue { background: rgba(255,255,255,0.15); }
-        .badge-orange { background: var(--accent-gold); border: none; }
-
-        .court-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 15px; }
-        .zone-box { background: var(--card-bg); border: 2px solid var(--card-border); border-radius: 8px; padding: 10px 4px; text-align: center; font-size: 11px; color: #e2e8f0; line-height: 1.4; cursor: pointer; position: relative; }
-        .sub-tag { position: absolute; top: 4px; right: 4px; font-size: 9px; background: var(--accent-blue); padding: 2px 4px; border-radius: 4px; font-weight: bold; color: white; }
-        .zone-title { font-size: 14px; font-weight: bold; color: var(--accent-gold); }
-        .role-title { font-size: 13px; font-weight: bold; color: #ffffff; margin: 4px 0; min-height: 18px; line-height: 1.2; }
-        .rv-text { font-weight: bold; font-size: 13px; margin: 3px 0; }
-        .rv-pos { color: var(--accent-green); }
-        .rv-neg { color: var(--accent-red); }
-        .pass-pr-line { font-size: 11px; color: var(--accent-gold); font-weight: bold; margin-top: 2px; }
-        .active-zone { border: 2px solid var(--accent-gold) !important; background: rgba(230, 149, 0, 0.25); }
-        
-        .grid-footer-text { font-size: 11px; color: #a0aec0; text-align: center; margin-bottom: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        
-        .score-hub { display: grid; grid-template-columns: 1fr 1.4fr 1fr; align-items: center; gap: 10px; margin-bottom: 25px; }
-        .score-side { text-align: center; }
-        .score-side-label { font-size: 11px; color: #a0aec0; text-transform: uppercase; margin-bottom: 2px; }
-        .score-number { font-size: 40px; font-weight: bold; color: #ffffff; }
-        .real-count { font-size: 32px; font-weight: bold; color: #ffffff; margin-top: 2px; }
-        .scoring-btn { height: 85px; border: 3px solid transparent; border-radius: 14px; font-weight: bold; font-size: 16px; cursor: pointer; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px; text-align: center; transition: all 0.15s ease; }
-        .btn-receivers { background: var(--accent-blue); }
-        .btn-servers { background: #e53e3e; }
-        .serving-active { border-color: #f6e05e !important; box-shadow: 0 0 18px rgba(246, 224, 94, 0.8); transform: scale(1.03); }
-        
-        .actions-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-        .action-btn { padding: 12px 5px; border: none; border-radius: 12px; font-weight: bold; font-size: 12px; color: white; cursor: pointer; text-align: center; }
-        .btn-undo { background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%); }
-        .btn-next { background: linear-gradient(135deg, #3182ce 0%, #2b6cb0 100%); }
-        .btn-end { background: linear-gradient(135deg, #805ad5 0%, #6b46c1 100%); }
-        
-        .dash-column { display: flex; flex-direction: column; gap: 15px; }
-        .history-panel { width: 100%; background: var(--panel-bg); border-radius: 15px; padding: 15px; box-sizing: border-box; border: 1px solid rgba(255,255,255,0.1); }
-        .history-title { font-size: 16px; font-weight: bold; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 5px; color: var(--accent-gold);}
-        .history-item { background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; }
-        .item-meta { display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 6px; border-bottom: 1px dashed rgba(255,255,255,0.15); padding-bottom: 4px;}
-        .mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 5px; }
-        .mini-box { background: rgba(0,0,0,0.25); border-radius: 6px; padding: 6px 4px; font-size: 10px; text-align: center; border: 1px solid rgba(255,255,255,0.05); line-height: 1.3; }
-        .btn-danger-action { background: transparent; border: 1px solid var(--accent-red); color: var(--accent-red); font-size: 11px; padding: 4px 8px; border-radius: 4px; cursor: pointer; float: right; margin-top: -32px; }
-        
-        .archive-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
-        .archive-header { padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; font-size: 13px; font-weight: bold; background: rgba(255,255,255,0.03); }
-        .archive-header:hover { background: rgba(255,157,0,0.1); }
-        .archive-body { display: none; padding: 10px; border-top: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); }
-
-        /* RECEIVERS SIDEBAR DRAWER */
-        .drawer-toggle { position: fixed; right: 0; top: 35%; background: var(--accent-gold); color: #000; padding: 14px 8px; font-weight: bold; font-size: 0.85rem; border-radius: 8px 0 0 8px; writing-mode: vertical-rl; text-orientation: mixed; cursor: pointer; z-index: 99; box-shadow: -2px 0 10px rgba(0,0,0,0.5); }
-        .drawer { position: fixed; right: -360px; top: 0; width: 350px; height: 100%; background: #111a2e; box-shadow: -4px 0 20px rgba(0,0,0,0.7); transition: right 0.3s ease; z-index: 100; padding: 16px; overflow-y: auto; border-left: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; gap: 14px; box-sizing: border-box; }
-        .drawer.open { right: 0; }
-        .drawer-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; }
-        .drawer-close { background: none; border: none; color: #fff; font-size: 1.4rem; cursor: pointer; }
-        .receiver-card { background: var(--card-bg); padding: 10px; border-radius: 8px; border: 1px solid var(--card-border); display: flex; flex-direction: column; gap: 8px; }
-        .receiver-header { display: flex; justify-content: space-between; align-items: center; }
-        .receiver-name { font-weight: bold; font-size: 0.95rem; color: #ffffff; }
-        .receiver-stats { font-size: 0.75rem; color: var(--text-dim); }
-        .rating-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-        .btn-sr { padding: 8px 0; border-radius: 6px; border: none; font-weight: bold; font-size: 1rem; cursor: pointer; color: #fff; text-align: center; }
-        .sr-0 { background: #e74c3c; }
-        .sr-1 { background: #e67e22; }
-        .sr-2 { background: #f1c40f; color: #000; }
-        .sr-3 { background: #2ecc71; }
-
-        /* MODAL FOR SUB SYSTEM */
-        .modal-overlay { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.75); z-index:200; justify-content: center; align-items: center; }
-        .modal-card { background: #1a2f44; border: 1px solid var(--accent-gold); border-radius: 12px; width: 90%; max-width: 400px; padding: 20px; box-sizing: border-box; color: white; }
-        .modal-title { font-size: 18px; font-weight: bold; color: var(--accent-gold); margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px; }
-        .bench-list-container { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; max-height: 180px; overflow-y: auto; }
-        .bench-item { background: rgba(255,255,255,0.08); padding: 10px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
-        .bench-item:hover { border-color: var(--accent-gold); background: rgba(255,157,0,0.15); }
-
-        @media (min-width: 900px) {
-            .dashboard-layout { grid-template-columns: 1.1fr 1.2fr 1.1fr; align-items: start; }
-            body { padding: 30px; }
-        }
-    </style>
-</head>
-<body>
-
-<div class="sync-banner" id="cloudSyncStatus">🔄 Connected to Live Database</div>
-
-<div class="dashboard-layout">
-    <!-- LEFT COLUMN: Active Match Sets -->
-    <div class="dash-column">
-        <div class="history-panel" id="matchSetsPanel">
-            <div class="history-title" id="activeMatchSetsTitle">⚔️ Active Match Sets</div>
-            <button class="btn-danger-action" style="border-color:#cbd5e0; color:#cbd5e0;" onclick="clearMatchSetsCloud()">Reset Match</button>
-            <div id="matchSetsContainer"></div>
-        </div>
-        <div class="history-panel" id="liveVaultPanel" style="display:none;">
-            <div class="history-title" id="liveVaultTitle">Live Set Snapshot</div>
-            <div id="liveVaultContainer"></div>
-        </div>
-    </div>
-
-    <!-- CENTER COLUMN: Setup & Active Match Tracker -->
-    <div class="dash-column">
-        <div class="container">
-            <!-- SETUP PANEL -->
-            <div id="setupScreen">
-                <h2 style="text-align:center; color:#fff; margin-top:5px;" id="setupHeaderTitle">VolleyIQ Setup</h2>
-                
-                <div class="setup-group" style="background: rgba(230, 149, 0, 0.15); border: 1px solid #e69500; padding: 10px; border-radius: 8px;">
-                    <label style="color: #ff9d00;">Active Team Profile</label>
-                    <select id="teamSelector" onchange="switchTeamProfile()">
-                        <option value="CGHS Senior A">CGHS Senior A</option>
-                        <option value="CGHS Senior B">CGHS Senior B</option>
-                        <option value="CGHS Senior C">CGHS Senior C</option>
-                        <option value="CGHS Junior A">CGHS Junior A</option>
-                        <option value="NEW_TEAM">+ Add Custom Team Profile...</option>
-                    </select>
-                </div>
-
-                <!-- MASTER ROSTER SECTION -->
-                <div class="setup-group" style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
-                        <label style="color: #ff9d00; margin:0;">Season Master Roster</label>
-                        <button style="background:transparent; border:1px solid var(--accent-gold); color:var(--accent-gold); border-radius:4px; font-size:11px; padding:2px 6px; cursor:pointer;" onclick="promptAddMasterPlayer()">+ Add Player</button>
-                    </div>
-                    <div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">Tap a chip to select & place. Tap '×' to delete player.</div>
-                    
-                    <div class="roster-pool" id="masterRosterChips"></div>
-                </div>
-
-                <!-- 3x2 COURT GRID FOR STARTING LINEUP (EXACTLY MATCHES ROTATION MATRIX) -->
-                <div class="setup-group" style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
-                    <label style="color: #4ade80; margin-bottom: 5px;">Starting Lineup Positions</label>
-                    <div class="court-slots-grid">
-                        <!-- Top Row (Front Row: IV, III, II) -->
-                        <div class="court-slot" id="slot_3" onclick="assignSelectedToSlot(3)"><div class="slot-title">Opp (IV)</div><div class="slot-player" id="slotName_3">Tap to Place</div></div>
-                        <div class="court-slot" id="slot_2" onclick="assignSelectedToSlot(2)"><div class="slot-title">M1 (III)</div><div class="slot-player" id="slotName_2">Tap to Place</div></div>
-                        <div class="court-slot" id="slot_1" onclick="assignSelectedToSlot(1)"><div class="slot-title">OH1 (II)</div><div class="slot-player" id="slotName_1">Tap to Place</div></div>
-                        <!-- Bottom Row (Back Row: V, VI, I) -->
-                        <div class="court-slot" id="slot_4" onclick="assignSelectedToSlot(4)"><div class="slot-title">OH2 (V)</div><div class="slot-player" id="slotName_4">Tap to Place</div></div>
-                        <div class="court-slot" id="slot_5" onclick="assignSelectedToSlot(5)"><div class="slot-title">M2 (VI)</div><div class="slot-player" id="slotName_5">Tap to Place</div></div>
-                        <div class="court-slot" id="slot_0" onclick="assignSelectedToSlot(0)"><div class="slot-title">Setter (I)</div><div class="slot-player" id="slotName_0">Tap to Place</div></div>
-                    </div>
-                </div>
-
-                <div class="setup-group">
-                    <label>Opponent Team Name</label>
-                    <input type="text" id="oppName" value="THEM">
-                </div>
-
-                <div class="setup-group">
-                    <label>Which base position starts in the **I** (Serving) box?</label>
-                    <select id="startingPosition">
-                        <option value="0">Setter</option>
-                        <option value="1">Outside Hitter 1 (OH1)</option>
-                        <option value="2">Middle Blocker 1 (M1)</option>
-                        <option value="3">Opposite (Opp)</option>
-                        <option value="4">Outside Hitter 2 (OH2)</option>
-                        <option value="5">Middle Blocker 2 (M2)</option>
-                    </select>
-                </div>
-                <div class="setup-group">
-                    <label>Starting State</label>
-                    <select id="receiveFirst">
-                        <option value="true">We Receive First</option>
-                        <option value="false">We Serve First</option>
-                    </select>
-                </div>
-                <button class="btn-start" id="startBtnLabel" onclick="startMatchCloud()">Start Set 1</button>
-            </div>
-
-            <!-- MAIN TRACKING SCREEN -->
-            <div id="matchScreen">
-                <div class="header-row">
-                    <div class="perf-title" id="currentSetLabel">Set 1</div>
-                    <div class="top-badge badge-orange" id="activeTeamBadge">Team</div>
-                    <div class="top-badge badge-blue" style="cursor:pointer;" onclick="abortCurrentSetCloud()">Exit to Setup</div>
-                </div>
-                <div class="court-grid">
-                    <div class="zone-box" id="courtBoxIV" onclick="promptSubPlayer('IV')"><div class="sub-tag">SUB</div><div class="zone-title">IV</div><div class="role-title" id="roleIV">-</div><div class="rv-text" id="rvIV">+0.00 RV</div><div id="statsIV">PS: 0% | SO: 0%</div><div class="pass-pr-line" id="prIV">Pass PR: 0.00</div></div>
-                    <div class="zone-box" id="courtBoxIII" onclick="promptSubPlayer('III')"><div class="sub-tag">SUB</div><div class="zone-title">III</div><div class="role-title" id="roleIII">-</div><div class="rv-text" id="rvIII">+0.00 RV</div><div id="statsIII">PS: 0% | SO: 0%</div><div class="pass-pr-line" id="prIII">Pass PR: 0.00</div></div>
-                    <div class="zone-box" id="courtBoxII" onclick="promptSubPlayer('II')"><div class="sub-tag">SUB</div><div class="zone-title">II</div><div class="role-title" id="roleII">-</div><div class="rv-text" id="rvII">+0.00 RV</div><div id="statsII">PS: 0% | SO: 0%</div><div class="pass-pr-line" id="prII">Pass PR: 0.00</div></div>
-                    <div class="zone-box" id="courtBoxV" onclick="promptSubPlayer('V')"><div class="sub-tag">SUB</div><div class="zone-title">V</div><div class="role-title" id="roleV">-</div><div class="rv-text" id="rvV">+0.00 RV</div><div id="statsV">PS: 0% | SO: 0%</div><div class="pass-pr-line" id="prV">Pass PR: 0.00</div></div>
-                    <div class="zone-box" id="courtBoxVI" onclick="promptSubPlayer('VI')"><div class="sub-tag">SUB</div><div class="zone-title">VI</div><div class="role-title" id="roleVI">-</div><div class="rv-text" id="rvVI">+0.00 RV</div><div id="statsVI">PS: 0% | SO: 0%</div><div class="pass-pr-line" id="prVI">Pass PR: 0.00</div></div>
-                    <div class="zone-box" id="courtBoxI" onclick="promptSubPlayer('I')"><div class="sub-tag">SUB</div><div class="zone-title">I</div><div class="role-title" id="roleI">-</div><div class="rv-text" id="rvI">+0.00 RV</div><div id="statsI">PS: 0% | SO: 0%</div><div class="pass-pr-line" id="prI">Pass PR: 0.00</div></div>
-                </div>
-                <div class="grid-footer-text">
-                    <div><strong>PS%</strong> = Serve Break Eff.<br><strong>SO%</strong> = Side-Out Eff.</div>
-                    <div>Tap box for <strong>Substitution</strong><br><strong>Active Highlight</strong> = Server Spot</div>
-                </div>
-                <div class="score-hub">
-                    <div class="score-side">
-                        <div class="score-side-label">Score</div><div class="score-number" id="usScoreDisplay">0</div>
-                        <div class="score-side-label" style="margin-top:5px;">Real</div><div class="real-count" id="usRealDisplay">0</div>
-                    </div>
-                    <div style="display: flex; flex-direction: column; gap: 8px;">
-                        <button class="scoring-btn btn-receivers" id="btnUs" onclick="scoreRallyCloud(true)">US</button>
-                        <button class="scoring-btn btn-servers" id="btnThem" onclick="scoreRallyCloud(false)">THEM</button>
-                    </div>
-                    <div class="score-side">
-                        <div class="score-side-label">Score</div><div class="score-number" id="themScoreDisplay">0</div>
-                        <div class="score-side-label" style="margin-top:5px;">Real</div><div class="real-count" id="themRealDisplay">0</div>
-                    </div>
-                </div>
-                <div class="actions-row">
-                    <button class="action-btn btn-undo" onclick="undoRallyCloud()">↺ Undo</button>
-                    <button class="action-btn btn-next" onclick="archiveAndNextSetCloud()">Next Set</button>
-                    <button class="action-btn btn-end" onclick="finishMatchCloud()">End Match</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- RIGHT COLUMN: Season Cumulative Averages & Compact Match Archive -->
-    <div class="dash-column">
-        <div class="history-panel" id="seasonVaultPanel">
-            <div class="history-title" id="seasonVaultTitle">📊 Season Averages</div>
-            <button class="btn-danger-action" onclick="clearSeasonHistoryCloud()">Wipe Baseline</button>
-            <div id="seasonVaultContainer"></div>
-        </div>
-
-        <div class="history-panel">
-            <div class="history-title" id="archivePanelTitle">📁 Match Archive</div>
-            <div id="archivedMatchesContainer"></div>
-        </div>
-    </div>
-</div>
-
-<!-- RECEIVERS SIDEBAR DRAWER -->
-<div class="drawer-toggle" onclick="toggleDrawer()">📥 RECEIVERS SIDEBAR</div>
-
-<div class="drawer" id="sideDrawer">
-    <div class="drawer-header">
-        <div style="font-weight:bold; color:var(--accent-gold);">Roster Receivers & Passing</div>
-        <button class="drawer-close" onclick="toggleDrawer()">✕</button>
-    </div>
-    <div style="font-size:0.8rem; color:var(--text-dim);">Log individual serve-receive scores (0-3) for any player:</div>
-    <div style="display:flex; flex-direction:column; gap:10px;" id="receiversList"></div>
-</div>
-
-<!-- MODAL DIALOG FOR SUB SYSTEM -->
-<div class="modal-overlay" id="subModal">
-    <div class="modal-card">
-        <div class="modal-title" id="subModalTitle">Substitution</div>
-        <div style="font-size:13px; color:var(--text-dim);" id="subModalCurrent">Current Player: </div>
-        
-        <div style="margin-top:12px; font-weight:bold; font-size:13px; color:var(--accent-gold);">Select Bench Player:</div>
-        <div class="bench-list-container" id="benchListContainer"></div>
-        
-        <div style="border-top: 1px dashed rgba(255,255,255,0.15); padding-top:10px; margin-top:10px;">
-            <label style="font-size:12px;">Or Enter New Player / #:</label>
-            <input type="text" id="customSubInput" placeholder="e.g. #15 Ella" style="margin-top:4px;">
-            <button class="btn-start" style="padding:8px; font-size:14px; margin-top:8px;" onclick="executeCustomSub()">Substitute New Player</button>
-        </div>
-        <button class="action-btn btn-undo" style="width:100%; margin-top:10px;" onclick="closeSubModal()">Cancel</button>
-    </div>
-</div>
-
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VolleyIQ Rotation Tracker</title>
+<style>
+:root{--bg:#25405d;--pn:#1a2f44;--ln:rgba(255,255,255,.15);--o:#ff9d00;--g:#4ade80;--r:#f87171;--b:#3182ce;--dim:#cbd5e0;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px);background:var(--bg)}
+*{box-sizing:inherit}
+body{margin:0;padding:12px;background:var(--bg);color:#fff;font:15px/1.35 -apple-system,"Segoe UI",Roboto,sans-serif}
+.grid{display:grid;gap:12px;max-width:1300px;margin:auto}#C{order:-1}
+@media(min-width:900px){.grid{grid-template-columns:1fr 1.15fr 1fr;align-items:start}#C{order:0}}
+.pn{background:var(--pn);border:1px solid var(--ln);border-radius:14px;padding:12px;margin-bottom:12px}
+#C .pn{background:linear-gradient(180deg,#2b4c70,#1e334a)}
+h2,h3{margin:0 0 8px;color:var(--o);font-size:1.05rem}
+label{display:block;margin:10px 0 4px;color:var(--dim);font-weight:700;font-size:.85rem}
+input,select{width:100%;padding:11px;border:1px solid #4a6b94;border-radius:8px;background:var(--pn);color:#fff;font:inherit}
+.row{display:flex;gap:6px;margin-top:6px;align-items:center}.row>*{flex:1}.row>button{flex:0 0 auto}
+button{font:inherit;cursor:pointer}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--o);outline-offset:2px}
+.bt{padding:12px;border:0;border-radius:10px;font-weight:700;color:#fff;background:var(--b)}
+.bt.o{background:var(--o);color:#000;width:100%;font-size:1.05rem;margin-top:12px}
+.bt.s{padding:8px 12px;background:transparent;border:1px solid var(--o);color:var(--o)}
+.bt.r{background:#c53030}.bt.p{background:#6b46c1}
+.chips{display:flex;flex-wrap:wrap;gap:6px;padding:8px;border:1px dashed var(--ln);border-radius:8px;min-height:44px}
+.chip{border:1px solid var(--o);border-radius:16px;padding:5px 10px;font-weight:700;font-size:.85rem;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+.chip.sel{background:var(--o);color:#000}.chip.used{opacity:.4}
+.chip b{background:rgba(255,255,255,.25);border-radius:50%;width:18px;height:18px;text-align:center;line-height:18px;font-size:.8rem}
+.net{text-align:center;font-size:.7rem;letter-spacing:.2em;color:var(--dim);border-bottom:2px solid var(--dim);margin:8px 0 6px}
+.court{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.slot,.zone{background:rgba(255,255,255,.06);border:2px dashed var(--ln);border-radius:8px;padding:10px 4px;text-align:center;min-height:70px;cursor:pointer;font-weight:700;font-size:.85rem;word-break:break-word;position:relative}
+.slot i,.zone i{display:block;font-style:normal;color:var(--o);font-size:.75rem}
+.slot.fill{border:2px solid var(--g)}.slot.tgt{border-color:var(--o)}
+.zone{border-style:solid}
+.zone.srv{border-color:var(--o);background:rgba(255,157,0,.25);box-shadow:0 0 12px rgba(255,157,0,.5)}
+.zone u{position:absolute;top:3px;left:4px;font-size:.6rem;background:var(--o);color:#000;padding:1px 4px;border-radius:4px;text-decoration:none}
+.hub{display:grid;grid-template-columns:1fr 1.6fr 1fr;gap:8px;align-items:center;margin:14px 0}
+.big{text-align:center;font-size:2.6rem;font-weight:800}.big small{display:block;font-size:.7rem;color:var(--dim);font-weight:400}
+.sc{height:76px;border:3px solid transparent;margin-bottom:8px;width:100%}
+.sv{border-color:#f6e05e;box-shadow:0 0 16px rgba(246,224,94,.7)}
+.acts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+table{width:100%;border-collapse:collapse;font-size:.8rem;margin-top:6px}
+th,td{padding:5px 3px;text-align:center;border-bottom:1px solid var(--ln)}th{color:var(--dim)}
+.pos{color:var(--g)}.neg{color:var(--r)}tr.best td{background:rgba(255,157,0,.22);font-weight:700}
+details{background:rgba(255,255,255,.05);border-radius:8px;padding:8px;margin-bottom:8px}
+summary{cursor:pointer;font-weight:700;display:flex;justify-content:space-between;gap:6px}
+.dim{color:var(--dim);font-size:.8rem}
+#D .tg{position:fixed;right:0;top:35%;background:var(--o);color:#000;border:0;padding:12px 8px;font-weight:700;writing-mode:vertical-rl;border-radius:8px 0 0 8px;z-index:50}
+#D .dr{position:fixed;right:-380px;top:0;width:340px;max-width:92vw;height:100%;background:#111a2e;padding:14px;overflow:auto;transition:right .25s;z-index:60}
+#D.open .dr{right:0}
+.rc{border:1px solid var(--ln);border-radius:8px;padding:8px;margin:8px 0}
+.rb{display:grid;grid-template-columns:repeat(4,1fr) auto;gap:5px;margin-top:6px}
+.rb button{padding:9px 8px;border:0;border-radius:6px;font-weight:700;color:#fff}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:100}
+.md{background:var(--pn);border:1px solid var(--o);border-radius:12px;padding:16px;width:90%;max-width:400px;max-height:90vh;overflow:auto}
+.bn{padding:10px;background:rgba(255,255,255,.08);border-radius:6px;margin:6px 0;cursor:pointer;font-weight:700}
+</style></head><body>
+<div class="grid"><div id="L"></div><div id="C"></div><div id="R"></div></div>
+<div id="D"></div><div id="M"></div>
 <script>
-// FIREBASE & LOCAL STORAGE SETUP
-const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    messagingSenderId: "YOUR_MESSAGING_ID",
-    appId: "YOUR_APP_ID"
-};
-
-let dbHasFirebase = false;
-if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
-    try {
-        firebase.initializeApp(firebaseConfig);
-        var db = firebase.firestore();
-        dbHasFirebase = true;
-    } catch(e) { console.warn("Local storage fallback active."); }
-}
-
-let activeTeamId = "CGHS Senior A"; 
-let liveSessionRef, seasonHistoryRef, matchHistoryRef;
-let liveUnsubscribe = null, seasonUnsubscribe = null, archiveUnsubscribe = null;
-
-const defaultRosterPool = ["#1 Maya", "#2 Sam", "#3 Sarah", "#5 Chloe", "#7 Mia", "#8 Ella", "#9 Chloe", "#11 Olivia", "#12 Grace", "#14 Lily"];
-
-let masterRoster = [];
-let selectedPlayerForAssignment = null;
-let startingSlots = ["", "", "", "", "", ""];
-
-let config = { 
-    teamName: "CGHS Senior A", 
-    oppName: "THEM", 
-    startingOffset: 0, 
-    receiveFirst: true, 
-    customNames: ["", "", "", "", "", ""],
-    bench: []
-};
-
-let rallyHistory = []; 
-let currentSetNumber = 1;
-let currentSetStatsRef = {};
-let matchSetsArray = []; 
-let playerPasses = {}; 
-let activeSubRoleIndex = null;
-
-const baseLineupOrder = ["Setter", "OH1", "M1", "Opp", "OH2", "M2"];
-const positionKeys = ["I", "II", "III", "IV", "V", "VI"];
-
-window.onload = function() {
-    document.getElementById('cloudSyncStatus').innerText = dbHasFirebase ? "🔄 Connected to Live Cloud Database" : "💾 Local Storage Mode";
-    loadSavedCustomTeams();
-    attachTeamCloudListeners(activeTeamId);
-};
-
-function loadSavedCustomTeams() {
-    const saved = localStorage.getItem("volleyIQ_custom_teams");
-    if(saved) {
-        const teams = JSON.parse(saved);
-        const select = document.getElementById('teamSelector');
-        teams.forEach(tName => {
-            let exists = Array.from(select.options).some(opt => opt.value === tName);
-            if(!exists) {
-                let opt = document.createElement('option');
-                opt.value = tName;
-                opt.innerText = tName;
-                select.insertBefore(opt, select.lastElementChild);
-            }
-        });
-    }
-}
-
-function saveCustomTeamToLocal(tName) {
-    let teams = [];
-    const saved = localStorage.getItem("volleyIQ_custom_teams");
-    if(saved) teams = JSON.parse(saved);
-    if(!teams.includes(tName)) {
-        teams.push(tName);
-        localStorage.setItem("volleyIQ_custom_teams", JSON.stringify(teams));
-    }
-}
-
-function switchTeamProfile() {
-    let select = document.getElementById('teamSelector');
-    let val = select.value;
-    if(val === "NEW_TEAM") {
-        let customName = prompt("Enter new CGHS team profile name (e.g., CGHS Junior B):");
-        if(customName && customName.trim() !== "") {
-            val = customName.trim();
-            let opt = document.createElement('option');
-            opt.value = val;
-            opt.innerText = val;
-            select.insertBefore(opt, select.lastElementChild);
-            select.value = val;
-            saveCustomTeamToLocal(val);
-        } else {
-            select.value = activeTeamId;
-            return;
-        }
-    }
-    
-    activeTeamId = val;
-    startingSlots = ["", "", "", "", "", ""];
-    attachTeamCloudListeners(activeTeamId);
-}
-
-// MASTER ROSTER LOGIC
-function loadMasterRoster() {
-    let savedRoster = localStorage.getItem(`volleyIQ_masterRoster_${activeTeamId}`);
-    if(savedRoster) {
-        masterRoster = JSON.parse(savedRoster);
-    } else {
-        masterRoster = [...defaultRosterPool];
-        saveMasterRoster();
-    }
-    renderMasterRosterChips();
-}
-
-function saveMasterRoster() {
-    localStorage.setItem(`volleyIQ_masterRoster_${activeTeamId}`, JSON.stringify(masterRoster));
-}
-
-function promptAddMasterPlayer() {
-    let pName = prompt("Enter new player name & number (e.g., #15 Emma):");
-    if(pName && pName.trim() !== "") {
-        let trimmed = pName.trim();
-        if(!masterRoster.includes(trimmed)) {
-            masterRoster.push(trimmed);
-            saveMasterRoster();
-            renderMasterRosterChips();
-        }
-    }
-}
-
-function renderMasterRosterChips() {
-    const container = document.getElementById('masterRosterChips');
-    container.innerHTML = "";
-    
-    masterRoster.forEach(pName => {
-        let isAssigned = startingSlots.includes(pName);
-        let chip = document.createElement('div');
-        chip.className = `player-chip ${selectedPlayerForAssignment === pName ? 'selected' : ''}`;
-        if(isAssigned) {
-            chip.style.opacity = "0.4";
-            chip.style.borderColor = "gray";
-        }
-
-        chip.innerHTML = `
-            <span>${pName}</span>
-            <button class="chip-del-btn" title="Delete player" onclick="deleteMasterPlayer('${pName}', event)">×</button>
-        `;
-
-        chip.onclick = function(e) {
-            if (e.target.classList.contains('chip-del-btn')) return;
-            selectPlayerChip(pName);
-        };
-
-        container.appendChild(chip);
-    });
-}
-
-function deleteMasterPlayer(pName, event) {
-    event.stopPropagation(); 
-    if (confirm(`Remove ${pName} from master roster?`)) {
-        masterRoster = masterRoster.filter(p => p !== pName);
-        startingSlots = startingSlots.map(slot => slot === pName ? "" : slot);
-        
-        saveMasterRoster();
-        renderSlotsUI();
-        renderMasterRosterChips();
-    }
-}
-
-function selectPlayerChip(pName) {
-    if(selectedPlayerForAssignment === pName) {
-        selectedPlayerForAssignment = null;
-    } else {
-        selectedPlayerForAssignment = pName;
-    }
-    renderMasterRosterChips();
-    updateSlotHighlights();
-}
-
-function updateSlotHighlights() {
-    for(let i = 0; i < 6; i++) {
-        let slotEl = document.getElementById(`slot_${i}`);
-        if(selectedPlayerForAssignment) {
-            slotEl.classList.add('target-active');
-        } else {
-            slotEl.classList.remove('target-active');
-        }
-    }
-}
-
-function assignSelectedToSlot(slotIndex) {
-    if(selectedPlayerForAssignment) {
-        let existingIdx = startingSlots.indexOf(selectedPlayerForAssignment);
-        if(existingIdx !== -1) startingSlots[existingIdx] = "";
-        
-        startingSlots[slotIndex] = selectedPlayerForAssignment;
-        selectedPlayerForAssignment = null;
-    } else {
-        startingSlots[slotIndex] = "";
-    }
-    
-    renderSlotsUI();
-    renderMasterRosterChips();
-    updateSlotHighlights();
-}
-
-function renderSlotsUI() {
-    for(let i = 0; i < 6; i++) {
-        let slotEl = document.getElementById(`slot_${i}`);
-        let nameEl = document.getElementById(`slotName_${i}`);
-        let val = startingSlots[i];
-        
-        if(val && val !== "") {
-            nameEl.innerText = val;
-            slotEl.classList.add('filled');
-        } else {
-            nameEl.innerText = "Tap to Place";
-            slotEl.classList.remove('filled');
-        }
-    }
-}
-
-function attachTeamCloudListeners(teamId) {
-    if(liveUnsubscribe) liveUnsubscribe();
-    if(seasonUnsubscribe) seasonUnsubscribe();
-    if(archiveUnsubscribe) archiveUnsubscribe();
-
-    const dbKey = teamId.replace(/[^a-zA-Z0-9]/g, "_");
-    loadMasterRoster();
-
-    if (dbHasFirebase) {
-        liveSessionRef = db.collection("volleyIQ_teams").doc(dbKey).collection("session").doc("live_state");
-        seasonHistoryRef = db.collection("volleyIQ_teams").doc(dbKey).collection("session").doc("season_vault");
-        matchHistoryRef = db.collection("volleyIQ_teams").doc(dbKey).collection("match_history");
-
-        liveUnsubscribe = liveSessionRef.onSnapshot(doc => {
-            if(doc.exists) {
-                const data = doc.data();
-                rallyHistory = data.rallyHistory || [];
-                config = data.config || { teamName: teamId, oppName: "THEM", startingOffset: 0, receiveFirst: true, customNames: ["", "", "", "", "", ""], bench: [] };
-                currentSetNumber = data.currentSetNumber || 1;
-                matchSetsArray = data.matchSetsArray || [];
-                
-                populateSetupFormFromConfig(config);
-                renderMatchSetsReview();
-
-                if(data.isActive) {
-                    showMatchUI();
-                    recalculateState();
-                } else {
-                    showSetupUI();
-                }
-            } else {
-                config = { teamName: teamId, oppName: "THEM", startingOffset: 0, receiveFirst: true, customNames: ["", "", "", "", "", ""] , bench: [] };
-                rallyHistory = [];
-                currentSetNumber = 1;
-                matchSetsArray = [];
-                playerPasses = {};
-                populateSetupFormFromConfig(config);
-                renderMatchSetsReview();
-                showSetupUI();
-            }
-        });
-
-        seasonUnsubscribe = seasonHistoryRef.onSnapshot(doc => {
-            document.getElementById('seasonVaultTitle').innerText = `📊 ${teamId} Season Averages`;
-            renderSeasonVault(doc.exists ? doc.data() : null);
-        });
-
-        archiveUnsubscribe = matchHistoryRef.orderBy("timestamp", "desc").onSnapshot(snapshot => {
-            let matches = [];
-            snapshot.forEach(doc => matches.push({ id: doc.id, ...doc.data() }));
-            renderArchivedMatches(matches);
-        });
-    } else {
-        let localState = localStorage.getItem(`volleyIQ_session_${dbKey}`);
-        if(localState) {
-            let data = JSON.parse(localState);
-            rallyHistory = data.rallyHistory || [];
-            config = data.config || { teamName: teamId, oppName: "THEM", startingOffset: 0, receiveFirst: true, customNames: ["", "", "", "", "", ""], bench: [] };
-            currentSetNumber = data.currentSetNumber || 1;
-            matchSetsArray = data.matchSetsArray || [];
-            populateSetupFormFromConfig(config);
-            renderMatchSetsReview();
-            if(data.isActive) showMatchUI(), recalculateState(); else showSetupUI();
-        } else {
-            showSetupUI();
-        }
-        renderLocalArchivedMatches();
-    }
-
-    document.getElementById('activeMatchSetsTitle').innerText = `⚔️ ${teamId} Active Match Sets`;
-    document.getElementById('archivePanelTitle').innerText = `📁 ${teamId} Match Archive`;
-}
-
-function populateSetupFormFromConfig(cfg) {
-    document.getElementById('oppName').value = cfg.oppName || "THEM";
-    document.getElementById('startingPosition').value = cfg.startingOffset || 0;
-    document.getElementById('receiveFirst').value = cfg.receiveFirst !== undefined ? String(cfg.receiveFirst) : "true";
-    
-    if(cfg.customNames && cfg.customNames.length === 6) {
-        startingSlots = [...cfg.customNames];
-    }
-    renderSlotsUI();
-    renderMasterRosterChips();
-}
-
-function showMatchUI() {
-    document.getElementById('setupScreen').style.display = 'none';
-    document.getElementById('matchScreen').style.display = 'block';
-    document.getElementById('liveVaultPanel').style.display = 'block';
-    document.getElementById('activeTeamBadge').innerText = activeTeamId;
-}
-
-function showSetupUI() {
-    document.getElementById('setupScreen').style.display = 'block';
-    document.getElementById('matchScreen').style.display = 'none';
-    document.getElementById('liveVaultPanel').style.display = 'none';
-    
-    document.getElementById('setupHeaderTitle').innerText = `${activeTeamId} Setup - Set ${currentSetNumber}`;
-    document.getElementById('startBtnLabel').innerText = `Start Set ${currentSetNumber}`;
-}
-
-function getAllRosterPlayers() {
-    let roster = [];
-    for(let i = 0; i < 6; i++) {
-        let name = config.customNames[i] ? config.customNames[i].trim() : baseLineupOrder[i];
-        if(!roster.includes(name)) roster.push(name);
-    }
-    if (config.bench && config.bench.length > 0) {
-        config.bench.forEach(bName => {
-            let trimmed = bName.trim();
-            if(trimmed && !roster.includes(trimmed)) roster.push(trimmed);
-        });
-    }
-    return roster;
-}
-
-function startMatchCloud() {
-    config.teamName = activeTeamId;
-    config.oppName = document.getElementById('oppName').value;
-    config.startingOffset = parseInt(document.getElementById('startingPosition').value);
-    config.receiveFirst = document.getElementById('receiveFirst').value === 'true';
-    
-    config.customNames = [];
-    for(let i = 0; i < 6; i++) {
-        let val = startingSlots[i] ? startingSlots[i].trim() : "";
-        config.customNames.push(val !== "" ? val : baseLineupOrder[i]);
-    }
-
-    config.bench = masterRoster.filter(p => !config.customNames.includes(p));
-
-    if (dbHasFirebase) {
-        liveSessionRef.set({
-            isActive: true,
-            config: config,
-            rallyHistory: [],
-            currentSetNumber: currentSetNumber,
-            matchSetsArray: matchSetsArray
-        });
-    } else {
-        saveSessionToLocal(true);
-        showMatchUI();
-        recalculateState();
-    }
-}
-
-function scoreRallyCloud(usWon) {
-    rallyHistory.push({ type: 'SCORE', usWon: usWon });
-    pushStateToCloud();
-}
-
-function undoRallyCloud() {
-    if (rallyHistory.length > 0) {
-        rallyHistory.pop();
-        pushStateToCloud();
-    }
-}
-
-function saveSessionToLocal(isActiveStatus) {
-    const dbKey = activeTeamId.replace(/[^a-zA-Z0-9]/g, "_");
-    localStorage.setItem(`volleyIQ_session_${dbKey}`, JSON.stringify({
-        isActive: isActiveStatus,
-        config: config,
-        rallyHistory: rallyHistory,
-        currentSetNumber: currentSetNumber,
-        matchSetsArray: matchSetsArray
-    }));
-}
-
-function pushStateToCloud() {
-    if (dbHasFirebase) {
-        liveSessionRef.update({
-            rallyHistory: rallyHistory,
-            config: config
-        });
-    } else {
-        saveSessionToLocal(true);
-        recalculateState();
-    }
-}
-
-function calcPR(passes) {
-    if (!passes || passes.length === 0) return "0.00";
-    return (passes.reduce((a, b) => a + b, 0) / passes.length).toFixed(2);
-}
-
-function recalculateState() {
-    let score = { us: 0, them: 0 };
-    let realPoints = { us: 0, them: 0 };
-    let rotationsCount = 0; 
-    let weAreServing = !config.receiveFirst;
-
-    document.getElementById('btnUs').innerText = config.teamName;
-    document.getElementById('btnThem').innerText = config.oppName;
-    document.getElementById('currentSetLabel').innerText = `Set ${currentSetNumber}`;
-    document.getElementById('liveVaultTitle').innerText = `Live Set ${currentSetNumber} Snapshot`;
-
-    playerPasses = {};
-    getAllRosterPlayers().forEach(pName => playerPasses[pName] = []);
-
-    let stats = {};
-    for(let i = 0; i < 6; i++) {
-        stats[i] = { receivingAttempts: 0, successfulSideOuts: 0, servingTurns: 0, realPointsScored: 0 };
-    }
-    if (weAreServing) { stats[0].servingTurns++; }
-
-    rallyHistory.forEach(action => {
-        if (action.type === 'PASS') {
-            if (!playerPasses[action.playerName]) playerPasses[action.playerName] = [];
-            playerPasses[action.playerName].push(action.score);
-        }
-        else if (action.type === 'SCORE' || typeof action === 'boolean') {
-            let usWon = typeof action === 'boolean' ? action : action.usWon;
-            let activeIdx = rotationsCount % 6;
-            if (usWon) {
-                score.us++;
-                if (!weAreServing) {
-                    stats[activeIdx].receivingAttempts++;
-                    stats[activeIdx].successfulSideOuts++;
-                    rotationsCount++;
-                    weAreServing = true;
-                    stats[rotationsCount % 6].servingTurns++;
-                } else {
-                    stats[activeIdx].realPointsScored++;
-                    realPoints.us++;
-                }
-            } else {
-                score.them++;
-                if (weAreServing) { 
-                    weAreServing = false; 
-                } else { 
-                    stats[activeIdx].receivingAttempts++; 
-                    realPoints.them++; 
-                }
-            }
-        }
-    });
-
-    if (weAreServing) {
-        document.getElementById('btnUs').className = 'scoring-btn btn-receivers serving-active';
-        document.getElementById('btnUs').innerHTML = `${config.teamName}<br><span style='font-size:20px;'>🏐</span>`;
-        document.getElementById('btnThem').className = 'scoring-btn btn-servers';
-        document.getElementById('btnThem').innerText = config.oppName;
-    } else {
-        document.getElementById('btnThem').className = 'scoring-btn btn-servers serving-active';
-        document.getElementById('btnThem').innerHTML = `${config.oppName}<br><span style='font-size:20px;'>🏐</span>`;
-        document.getElementById('btnUs').className = 'scoring-btn btn-receivers';
-        document.getElementById('btnUs').innerText = config.teamName;
-    }
-
-    document.getElementById('usScoreDisplay').innerText = score.us;
-    document.getElementById('themScoreDisplay').innerText = score.them;
-    document.getElementById('usRealDisplay').innerText = realPoints.us;
-    document.getElementById('themRealDisplay').innerText = realPoints.them;
-
-    positionKeys.forEach(k => document.getElementById(`courtBox${k}`).classList.remove('active-zone'));
-    currentSetStatsRef = { setNum: currentSetNumber, scoreLine: `${score.us} - ${score.them}`, mapping: {} };
-
-    for (let i = 0; i < 6; i++) {
-        let roleIndex = (i + config.startingOffset) % 6;
-        let baseRole = baseLineupOrder[roleIndex];
-        let customVal = config.customNames[roleIndex];
-        let activePlayerName = customVal !== "" ? customVal : baseRole;
-
-        let currentPositionIndex = (i - rotationsCount) % 6;
-        if (currentPositionIndex < 0) currentPositionIndex += 6;
-        let currentBoxKey = positionKeys[currentPositionIndex];
-
-        let s = stats[i];
-        let soPct = s.receivingAttempts > 0 ? ((s.successfulSideOuts / s.receivingAttempts) * 100).toFixed(0) : '0';
-        let psPct = s.servingTurns > 0 ? ((s.realPointsScored / s.servingTurns) * 100).toFixed(0) : '0';
-        let netValue = s.realPointsScored - (s.receivingAttempts - s.successfulSideOuts);
-        let netSign = netValue >= 0 ? `+${netValue}` : `${netValue}`;
-
-        let passes = playerPasses[activePlayerName] || [];
-        let playerPR = calcPR(passes);
-
-        document.getElementById(`role${currentBoxKey}`).innerText = `${baseRole}\n(${activePlayerName})`;
-        document.getElementById(`rv${currentBoxKey}`).innerText = `${netSign} RV`;
-        document.getElementById(`rv${currentBoxKey}`).className = `rv-text ${netValue >= 0 ? 'rv-pos' : 'rv-neg'}`;
-        document.getElementById(`stats${currentBoxKey}`).innerText = `PS: ${psPct}% | SO: ${soPct}%`;
-        document.getElementById(`pr${currentBoxKey}`).innerText = `Pass PR: ${playerPR}`;
-
-        if (i === (rotationsCount % 6)) {
-            document.getElementById(`courtBox${currentBoxKey}`).classList.add('active-zone');
-        }
-
-        currentSetStatsRef.mapping[positionKeys[roleIndex]] = {
-            name: `${baseRole} (${activePlayerName})`,
-            receivingAttempts: s.receivingAttempts,
-            successfulSideOuts: s.successfulSideOuts,
-            servingTurns: s.servingTurns,
-            realPointsScored: s.realPointsScored,
-            netValue: netValue,
-            netSign: netSign,
-            psPct: psPct,
-            soPct: soPct,
-            passPR: playerPR
-        };
-    }
-    renderLiveVault();
-    renderReceiversSidebar();
-}
-
-function promptSubPlayer(boxKey) {
-    const roleEl = document.getElementById(`role${boxKey}`);
-    const currentText = roleEl.innerText.replace('\n', ' ');
-    
-    for (let i = 0; i < 6; i++) {
-        let roleIndex = (i + config.startingOffset) % 6;
-        let baseRole = baseLineupOrder[roleIndex];
-        if (currentText.includes(baseRole)) {
-            activeSubRoleIndex = roleIndex;
-            break;
-        }
-    }
-
-    document.getElementById('subModalTitle').innerText = `Substitution - Box ${boxKey}`;
-    document.getElementById('subModalCurrent').innerText = `Current Court Player: ${currentText}`;
-    document.getElementById('customSubInput').value = "";
-    
-    const benchContainer = document.getElementById('benchListContainer');
-    benchContainer.innerHTML = "";
-    
-    if (config.bench && config.bench.length > 0) {
-        config.bench.forEach((player, bIdx) => {
-            let div = document.createElement('div');
-            div.className = 'bench-item';
-            div.innerHTML = `<span><strong>${player}</strong></span><span style="color:var(--accent-gold); font-weight:bold; font-size:12px;">Sub In ➔</span>`;
-            div.onclick = function() { executeBenchSub(bIdx); };
-            benchContainer.appendChild(div);
-        });
-    } else {
-        benchContainer.innerHTML = `<div style="color:var(--text-dim); font-size:12px; text-align:center;">No players currently on the bench.</div>`;
-    }
-
-    document.getElementById('subModal').style.display = 'flex';
-}
-
-function closeSubModal() {
-    document.getElementById('subModal').style.display = 'none';
-    activeSubRoleIndex = null;
-}
-
-function executeBenchSub(benchIdx) {
-    if (activeSubRoleIndex === null) return;
-
-    let subInPlayer = config.bench[benchIdx];
-    let subOutPlayer = config.customNames[activeSubRoleIndex];
-
-    config.customNames[activeSubRoleIndex] = subInPlayer;
-    config.bench.splice(benchIdx, 1);
-    
-    if (subOutPlayer && subOutPlayer.trim() !== "") {
-        config.bench.push(subOutPlayer);
-    }
-
-    closeSubModal();
-    pushStateToCloud();
-}
-
-function executeCustomSub() {
-    if (activeSubRoleIndex === null) return;
-    let newName = document.getElementById('customSubInput').value.trim();
-    if (!newName) return;
-
-    let subOutPlayer = config.customNames[activeSubRoleIndex];
-    config.customNames[activeSubRoleIndex] = newName;
-
-    if (subOutPlayer && subOutPlayer.trim() !== "") {
-        if (!config.bench) config.bench = [];
-        config.bench.push(subOutPlayer);
-    }
-
-    closeSubModal();
-    pushStateToCloud();
-}
-
-function toggleDrawer() {
-    document.getElementById('sideDrawer').classList.toggle('open');
-}
-
-function renderReceiversSidebar() {
-    const list = document.getElementById('receiversList');
-    if(!list) return;
-    list.innerHTML = '';
-
-    const roster = getAllRosterPlayers();
-
-    roster.forEach(pName => {
-        let passes = playerPasses[pName] || [];
-        let pr = calcPR(passes);
-
-        const card = document.createElement('div');
-        card.className = 'receiver-card';
-        card.innerHTML = `
-            <div class="receiver-header">
-                <span class="receiver-name">${pName}</span>
-                <span class="receiver-stats">PR: <b style="color:var(--accent-gold); font-size:0.9rem;">${pr}</b> (${passes.length} passes)</span>
-            </div>
-            <div class="rating-bar">
-                <button class="btn-sr sr-0" onclick="recordPassForPlayer('${pName}', 0)">0</button>
-                <button class="btn-sr sr-1" onclick="recordPassForPlayer('${pName}', 1)">1</button>
-                <button class="btn-sr sr-2" onclick="recordPassForPlayer('${pName}', 2)">2</button>
-                <button class="btn-sr sr-3" onclick="recordPassForPlayer('${pName}', 3)">3</button>
-            </div>
-        `;
-        list.appendChild(card);
-    });
-}
-
-function recordPassForPlayer(playerName, score) {
-    rallyHistory.push({ type: 'PASS', playerName: playerName, score: score });
-    pushStateToCloud();
-}
-
-function renderLiveVault() {
-    const container = document.getElementById('liveVaultContainer');
-    let gridHTML = `<div class="mini-grid">`;
-    const fixedOrder = ["IV", "III", "II", "V", "VI", "I"];
-    fixedOrder.forEach(k => {
-        let r = currentSetStatsRef.mapping[k];
-        if(r) {
-            let color = r.netValue >= 0 ? '#4ade80' : '#f87171';
-            gridHTML += `<div class="mini-box"><strong>Box ${k}</strong><br>${r.name}<br><span style="color:${color}">${r.netSign} RV</span><br>PS:${r.psPct}%|SO:${r.soPct}%<br>PR:${r.passPR || '0.00'}</div>`;
-        }
-    });
-    gridHTML += `</div>`;
-    container.innerHTML = `<div class="history-item"><div class="item-meta"><span>Active Set ${currentSetNumber} Live</span><span style="color:#ff9d00">${currentSetStatsRef.scoreLine}</span></div>${gridHTML}</div>`;
-}
-
-function archiveAndNextSetCloud() {
-    if (rallyHistory.length === 0) {
-        alert("Please track at least one rally or pass before finishing the set.");
-        return;
-    }
-    
-    let nextSetNum = currentSetNumber + 1;
-    if (confirm(`Save Set ${currentSetNumber} into Match Log and open setup for Set ${nextSetNum}?`)) {
-        let updatedMatchSets = [...matchSetsArray, JSON.parse(JSON.stringify(currentSetStatsRef))];
-        saveSetToSeasonBaseline();
-
-        matchSetsArray = updatedMatchSets;
-        rallyHistory = [];
-        currentSetNumber = nextSetNum;
-
-        if (dbHasFirebase) {
-            liveSessionRef.set({
-                isActive: false,
-                config: config,
-                rallyHistory: [],
-                currentSetNumber: nextSetNum,
-                matchSetsArray: updatedMatchSets
-            });
-        } else {
-            saveSessionToLocal(false);
-            renderMatchSetsReview();
-            showSetupUI();
-        }
-    }
-}
-
-function finishMatchCloud() {
-    if (matchSetsArray.length === 0 && rallyHistory.length === 0) {
-        alert("No set data recorded yet for this match.");
-        return;
-    }
-
-    if (confirm(`Finish match for ${activeTeamId}? This will archive the match and reset the tracker.`)) {
-        let updatedMatchSets = [...matchSetsArray];
-
-        if (rallyHistory.length > 0 && currentSetStatsRef.mapping) {
-            updatedMatchSets.push(JSON.parse(JSON.stringify(currentSetStatsRef)));
-            saveSetToSeasonBaseline();
-        }
-
-        const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        const newMatchRecord = {
-            id: "match_" + Date.now(),
-            opponent: config.oppName || "Opponent",
-            date: dateStr,
-            timestamp: Date.now(),
-            sets: updatedMatchSets
-        };
-
-        if (dbHasFirebase) {
-            matchHistoryRef.add(newMatchRecord);
-            liveSessionRef.set({ 
-                isActive: false,
-                config: config,
-                rallyHistory: [],
-                currentSetNumber: 1,
-                matchSetsArray: []
-            });
-        } else {
-            const dbKey = activeTeamId.replace(/[^a-zA-Z0-9]/g, "_");
-            let archiveList = JSON.parse(localStorage.getItem(`volleyIQ_archive_${dbKey}`) || "[]");
-            archiveList.unshift(newMatchRecord);
-            localStorage.setItem(`volleyIQ_archive_${dbKey}`, JSON.stringify(archiveList));
-
-            rallyHistory = [];
-            matchSetsArray = [];
-            currentSetNumber = 1;
-            saveSessionToLocal(false);
-
-            renderLocalArchivedMatches();
-            renderMatchSetsReview();
-            showSetupUI();
-        }
-    }
-}
-
-function abortCurrentSetCloud() {
-    if (confirm("Exit to setup without saving this active set?")) {
-        if (dbHasFirebase) {
-            liveSessionRef.update({ isActive: false });
-        } else {
-            saveSessionToLocal(false);
-            showSetupUI();
-        }
-    }
-}
-
-function clearMatchSetsCloud() {
-    if(confirm("Reset all current match set logs?")) {
-        matchSetsArray = [];
-        if (dbHasFirebase) {
-            liveSessionRef.update({ matchSetsArray: [] });
-        } else {
-            saveSessionToLocal(false);
-        }
-        renderMatchSetsReview();
-    }
-}
-
-function saveSetToSeasonBaseline() {
-    if (dbHasFirebase) {
-        db.runTransaction(transaction => {
-            return transaction.get(seasonHistoryRef).then(resDoc => {
-                let sData = resDoc.exists ? resDoc.data() : { totalSets: 0, boxes: {} };
-                positionKeys.forEach(k => {
-                    if(!sData.boxes[k]) sData.boxes[k] = { receivingAttempts: 0, successfulSideOuts: 0, servingTurns: 0, realPointsScored: 0, netValue: 0 };
-                    let r = currentSetStatsRef.mapping[k];
-                    if(r) {
-                        sData.boxes[k].receivingAttempts += r.receivingAttempts;
-                        sData.boxes[k].successfulSideOuts += r.successfulSideOuts;
-                        sData.boxes[k].servingTurns += r.servingTurns;
-                        sData.boxes[k].realPointsScored += r.realPointsScored;
-                        sData.boxes[k].netValue += r.netValue;
-                    }
-                });
-                sData.totalSets += 1;
-                transaction.set(seasonHistoryRef, sData);
-            });
-        });
-    } else {
-        const dbKey = activeTeamId.replace(/[^a-zA-Z0-9]/g, "_");
-        let sData = JSON.parse(localStorage.getItem(`volleyIQ_season_${dbKey}`) || '{"totalSets":0, "boxes":{}}');
-        positionKeys.forEach(k => {
-            if(!sData.boxes[k]) sData.boxes[k] = { receivingAttempts: 0, successfulSideOuts: 0, servingTurns: 0, realPointsScored: 0, netValue: 0 };
-            let r = currentSetStatsRef.mapping[k];
-            if(r) {
-                sData.boxes[k].receivingAttempts += r.receivingAttempts;
-                sData.boxes[k].successfulSideOuts += r.successfulSideOuts;
-                sData.boxes[k].servingTurns += r.servingTurns;
-                sData.boxes[k].realPointsScored += r.realPointsScored;
-                sData.boxes[k].netValue += r.netValue;
-            }
-        });
-        sData.totalSets += 1;
-        localStorage.setItem(`volleyIQ_season_${dbKey}`, JSON.stringify(sData));
-        renderSeasonVault(sData);
-    }
-}
-
-function clearSeasonHistoryCloud() {
-    if(confirm(`Wipe all season baseline statistics for ${activeTeamId}?`)) {
-        if (dbHasFirebase) {
-            seasonHistoryRef.delete();
-        } else {
-            const dbKey = activeTeamId.replace(/[^a-zA-Z0-9]/g, "_");
-            localStorage.removeItem(`volleyIQ_season_${dbKey}`);
-            renderSeasonVault(null);
-        }
-    }
-}
-
-function renderMatchSetsReview() {
-    const container = document.getElementById('matchSetsContainer');
-    if(!matchSetsArray || matchSetsArray.length === 0) {
-        container.innerHTML = `<div style="color:#a0aec0; text-align:center; font-size:12px;">No completed sets recorded in current match.</div>`;
-        return;
-    }
-    let html = "";
-    matchSetsArray.forEach((s, idx) => {
-        let gridHTML = `<div class="mini-grid">`;
-        const fixedOrder = ["IV", "III", "II", "V", "VI", "I"];
-        fixedOrder.forEach(k => {
-            let r = s.mapping[k];
-            if(r) {
-                let color = r.netValue >= 0 ? '#4ade80' : '#f87171';
-                gridHTML += `<div class="mini-box"><strong>Box ${k}</strong><br>${r.name}<br><span style="color:${color}">${r.netSign} RV</span><br>PS:${r.psPct}%|SO:${r.soPct}%</div>`;
-            }
-        });
-        gridHTML += `</div>`;
-        html += `<div class="history-item"><div class="item-meta"><span>Set ${idx + 1}</span><span style="color:#ff9d00">${s.scoreLine}</span></div>${gridHTML}</div>`;
-    });
-    container.innerHTML = html;
-}
-
-function renderSeasonVault(data) {
-    const container = document.getElementById('seasonVaultContainer');
-    if(!data || !data.boxes || data.totalSets === 0) {
-        container.innerHTML = `<div style="color:#a0aec0; text-align:center; font-size:12px;">No season statistics logged yet.</div>`;
-        return;
-    }
-    let gridHTML = `<div class="mini-grid">`;
-    const fixedOrder = ["IV", "III", "II", "V", "VI", "I"];
-    fixedOrder.forEach(k => {
-        let b = data.boxes[k];
-        if(b) {
-            let soPct = b.receivingAttempts > 0 ? ((b.successfulSideOuts / b.receivingAttempts) * 100).toFixed(0) : '0';
-            let psPct = b.servingTurns > 0 ? ((b.realPointsScored / b.servingTurns) * 100).toFixed(0) : '0';
-            let avgRV = (b.netValue / data.totalSets).toFixed(1);
-            let sign = avgRV >= 0 ? `+${avgRV}` : `${avgRV}`;
-            let color = avgRV >= 0 ? '#4ade80' : '#f87171';
-            gridHTML += `<div class="mini-box"><strong>Box ${k}</strong><br><span style="color:${color}">${sign} RV/Set</span><br>PS:${psPct}%|SO:${soPct}%</div>`;
-        }
-    });
-    gridHTML += `</div>`;
-    container.innerHTML = `<div class="history-item"><div class="item-meta"><span>Cumulative (${data.totalSets} Sets)</span></div>${gridHTML}</div>`;
-}
-
-function renderLocalArchivedMatches() {
-    const dbKey = activeTeamId.replace(/[^a-zA-Z0-9]/g, "_");
-    let archiveList = JSON.parse(localStorage.getItem(`volleyIQ_archive_${dbKey}`) || "[]");
-    renderArchivedMatches(archiveList);
-}
-
-function renderArchivedMatches(matches) {
-    const container = document.getElementById('archivedMatchesContainer');
-    if(!matches || matches.length === 0) {
-        container.innerHTML = `<div style="color:#a0aec0; text-align:center; font-size:12px;">No archived match records for ${activeTeamId}.</div>`;
-        return;
-    }
-    let html = "";
-    matches.forEach(m => {
-        html += `<div class="archive-card">
-            <div class="archive-header" onclick="toggleArchiveBody('${m.id}')">
-                <span>vs ${m.opponent} (${m.date})</span>
-                <span style="color:#ff9d00;">${m.sets ? m.sets.length : 0} Sets ▾</span>
-            </div>
-            <div class="archive-body" id="archive_${m.id}">`;
-        
-        if(m.sets) {
-            m.sets.forEach((s, idx) => {
-                html += `<div style="font-size:11px; margin-bottom:4px;"><strong>Set ${idx + 1}:</strong> ${s.scoreLine}</div>`;
-            });
-        }
-        
-        html += `</div></div>`;
-    });
-    container.innerHTML = html;
-}
-
-function toggleArchiveBody(docId) {
-    const el = document.getElementById(`archive_${docId}`);
-    if(el) {
-        el.style.display = el.style.display === 'block' ? 'none' : 'block';
-    }
-}
-</script>
-</body>
-</html>
+// Zones by index: I=0 II=1 III=2 IV=3 V=4 VI=5. Clockwise: player in II moves to I.
+var Z=["I","II","III","IV","V","VI"],SR=[0,5,4,3,2,1],GRID=[3,2,1,4,5,0],
+PRE=["CGHS Senior A","CGHS Senior B","CGHS Senior C","CGHS Junior A"],
+SEED=["#1 Maya","#2 Sam","#3 Sarah","#5 Chloe","#7 Mia","#8 Ella","#9 Chloe","#11 Olivia","#12 Grace","#14 Lily"];
+var DB={active:PRE[0],teams:{}};
+try{var raw=localStorage.getItem("viq2");if(raw)DB=JSON.parse(raw)}catch(e){}
+var V={sel:null,slots:["","","","","",""],sz:0,recv:"1",opp:"THEM",msg:"",drawer:false,modal:null,pend:null,open:{}};
+function q(i){return document.getElementById(i)}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function save(){try{localStorage.setItem("viq2",JSON.stringify(DB))}catch(e){}}
+function T(){var t=DB.teams[DB.active];if(!t)t=DB.teams[DB.active]={roster:SEED.slice(),live:null,archive:[]};return t}
+function teams(){var a=PRE.slice();Object.keys(DB.teams).forEach(function(k){if(a.indexOf(k)<0)a.push(k)});return a}
+function isR(h){return h.t==="r"}
+function blank(){return[0,1,2,3,4,5].map(function(){return{pf:0,pa:0,sr:0,sw:0,rr:0,rw:0}})}
+function addRot(a,b){b.forEach(function(x,i){for(var k in x)a[i][k]+=x[k]})}
+function pc(a,b){return b?Math.round(a/b*100)+"%":"–"}
+function sg(n){return(n>0?"+":"")+n}
+function avg(a){return a.reduce(function(x,y){return x+y},0)/a.length}
+
+// Replays every rally/sub in order: rotation, server, score and per-rotation stats.
+function replay(L){var c=L.cfg,lu=c.slots.slice(),sv=!c.recv,k=0,us=0,th=0,rot=blank();
+ L.hist.forEach(function(h){
+  if(h.t==="s"){lu[h.z]=h.p;return}
+  var x=rot[(c.rs+k)%6];
+  if(sv){x.sr++;if(h.u){x.sw++;x.pf++;us++}else{x.pa++;th++;sv=false}}
+  else{x.rr++;if(h.u){x.rw++;x.pf++;us++;sv=true;lu=lu.map(function(_,i,a){return a[(i+1)%6]});k++}else{x.pa++;th++}}
+ });
+ return{lu:lu,serving:sv,us:us,th:th,rot:rot,rn:(c.rs+k)%6}}
+
+function bestIdx(rot){var b=-1,v=-999;rot.forEach(function(x,i){if(x.pf+x.pa&&x.pf-x.pa>v){v=x.pf-x.pa;b=i}});return b}
+function rotTable(rot){var b=bestIdx(rot);
+ return'<table><tr><th>Rot</th><th>+/-</th><th>Pts</th><th>Serve%</th><th>SO%</th></tr>'+rot.map(function(x,i){var d=x.pf-x.pa;
+ return'<tr'+(i===b?' class="best"':'')+'><td>R'+(i+1)+'</td><td class="'+(d>0?"pos":d<0?"neg":"")+'">'+sg(d)+'</td><td>'+x.pf+'-'+x.pa+'</td><td>'+pc(x.sw,x.sr)+'</td><td>'+pc(x.rw,x.rr)+'</td></tr>'}).join("")+'</table>'}
+function bestLine(rot){var b=bestIdx(rot);return b<0?"":'<p><b class="pos">Best starting rotation: R'+(b+1)+'</b> ('+sg(rot[b].pf-rot[b].pa)+' pts)</p>'}
+function passAvg(ps){var k=Object.keys(ps||{}).filter(function(p){return ps[p].length});if(!k.length)return"";
+ return'<p class="dim"><b>Passing average (0–3)</b><br>'+k.map(function(p){return esc(p)+': <b>'+avg(ps[p]).toFixed(2)+'</b> ('+ps[p].length+')'}).join('<br>')+'</p>'}
+function det(k,s,b,def){var o=V.open[k]===undefined?def:V.open[k];return'<details data-k="'+k+'"'+(o?' open':'')+'><summary>'+s+'</summary>'+b+'</details>'}
+function setCard(s,opp,key,def,live){var w=s.us>s.th;
+ return det(key,'<span>Set '+s.n+(live?' (live)':'')+'</span><span>US '+s.us+' – '+s.th+' '+esc(opp)+(live?'':' <b class="'+(w?"pos":"neg")+'">'+(w?"W":"L")+'</b>')+'</span>',rotTable(s.rot),def)}
+function season(t){var rot=blank(),sets=0,sw=0,ps={},mc=0;
+ t.archive.forEach(function(m){if(m.ignored)return;mc++;m.sets.forEach(function(s){addRot(rot,s.rot);sets++;if(s.us>s.th)sw++});
+  for(var p in m.passes){(ps[p]=ps[p]||[]);m.passes[p].forEach(function(n){ps[p].push(n)})}});
+ return{rot:rot,sets:sets,sw:sw,ps:ps,mc:mc}}
+function opt(v,l,s){return'<option value="'+v+'"'+(s?' selected':'')+'>'+l+'</option>'}
+
+function leftHTML(t){var L=t.live,h='<div class="pn"><h3>Sets this match'+(L?' · vs '+esc(L.opp):'')+'</h3>';
+ if(!L)return h+'<p class="dim">Each set you finish is saved here so you can refer back to it. Start a set to begin.</p></div>';
+ var tot=blank(),live=L.phase==="play"&&L.hist.some(isR);
+ L.sets.forEach(function(s){addRot(tot,s.rot);h+=setCard(s,L.opp,"L"+s.n,false)});
+ if(live){var r=replay(L);addRot(tot,r.rot);h+=setCard({n:L.n,us:r.us,th:r.th,rot:r.rot},L.opp,"Llive",true,true)}
+ if(!L.sets.length&&!live)h+='<p class="dim">No sets recorded yet.</p>';
+ else h+='<h3 style="margin-top:12px">Match rotations so far</h3>'+rotTable(tot);
+ return h+'</div>'}
+
+function rightHTML(t){var S=season(t),h='<div class="pn"><h3>Season rotation efficiency</h3>';
+ if(!S.sets)h+='<p class="dim">'+(t.archive.length?'All saved matches are ignored, so there are no season totals.':'Finish a match and it is added here automatically.')+'</p>';
+ else h+='<p class="dim">'+S.mc+' match(es)'+(t.archive.length>S.mc?' ('+(t.archive.length-S.mc)+' ignored)':'')+' · sets '+S.sw+'-'+(S.sets-S.sw)+'</p>'+rotTable(S.rot)+bestLine(S.rot)+passAvg(S.ps);
+ h+='<p class="dim">R1 = setter in Zone I (serving), R2 = VI, R3 = V, R4 = IV, R5 = III, R6 = II. Highlighted row has the best +/- points.</p></div><div class="pn"><h3>Match archive</h3>';
+ if(!t.archive.length)h+='<p class="dim">No matches saved yet.</p>';
+ t.archive.forEach(function(m,i){var tot=blank(),w=0;m.sets.forEach(function(s){addRot(tot,s.rot);if(s.us>s.th)w++});
+  h+=det("m"+m.id,'<span>vs '+esc(m.opp)+' · '+new Date(m.ts).toLocaleDateString()+(m.ignored?' <b class="neg">(ignored)</b>':'')+'</span><span>Sets '+w+'-'+(m.sets.length-w)+'</span>',
+   m.sets.map(function(s){return setCard(s,m.opp,"m"+m.id+"s"+s.n,false)}).join("")+'<p class="dim"><b>Match rotations</b></p>'+rotTable(tot)+passAvg(m.passes)+(m.ignored?'<p class="dim">Ignored: this match is not counted in the season totals.</p>':'')+'<div class="row"><button class="bt s" data-a="ign" data-i="'+i+'">'+(m.ignored?'Include in season':'Ignore in season')+'</button><button class="bt s" data-a="delm" data-i="'+i+'">Delete match</button></div>',false)});
+ return h+'</div>'}
+
+function setupHTML(t){var L=t.live,h='<div class="pn"><h2>Lineup setup · Set '+(L?L.n:1)+'</h2>';
+ h+='<label>Team</label><select id="tm">'+teams().map(function(n){return opt(esc(n),esc(n),n===DB.active)}).join("")+'</select>'+
+ '<div class="row"><input id="nt" placeholder="New team name"><button class="bt s" data-a="addteam">Add team</button></div>'+
+ '<label>Roster <span class="dim">(tap a name, then tap a spot on the court)</span></label><div class="chips">'+t.roster.map(function(p,i){
+  return'<span class="chip'+(V.sel===p?" sel":"")+(V.slots.indexOf(p)>-1?" used":"")+'" data-a="pick" data-p="'+esc(p)+'">'+esc(p)+'<b data-a="delp" data-i="'+i+'">×</b></span>'}).join("")+'</div>'+
+ '<div class="row"><input id="np" placeholder="#15 Emma"><button class="bt s" data-a="addp">Add player</button></div>'+
+ '<label>Starting lineup <span class="dim">(as you see the court, net at top)</span></label><div class="net">NET</div><div class="court">'+GRID.map(function(z){
+  return'<div class="slot'+(V.slots[z]?" fill":"")+(V.sel?" tgt":"")+'" data-a="slot" data-z="'+z+'"><i>Zone '+Z[z]+'</i>'+(esc(V.slots[z])||"Tap to place")+'</div>'}).join("")+'</div>'+
+ '<label>Where does your setter start?</label><select id="sz">'+Z.map(function(n,i){return opt(i,'Zone '+n+' (Rotation '+(SR.indexOf(i)+1)+')',V.sz===i)}).join("")+'</select>'+
+ '<label>Opponent</label><input id="opp" value="'+esc(V.opp)+'">'+
+ '<label>Starting state</label><select id="rv">'+opt("1","We receive first",V.recv==="1")+opt("0","We serve first",V.recv==="0")+'</select>'+
+ (V.msg?'<p class="neg">'+esc(V.msg)+'</p>':'')+
+ '<button class="bt o" data-a="start">Start Set '+(L?L.n:1)+'</button>'+
+ (L&&L.sets.length?'<button class="bt p" style="width:100%;margin-top:8px" data-a="end">End match &amp; save</button>':'')+'</div>';
+ return h}
+
+function playHTML(t){var L=t.live,r=replay(L),x=r.rot[r.rn];
+ return'<div class="pn"><div class="row"><h2 style="margin:0">Set '+L.n+'</h2><span class="dim">'+esc(DB.active)+'</span><button class="bt s" data-a="exit">Discard match</button></div>'+
+ '<div class="net">NET</div><div class="court">'+GRID.map(function(z){return'<div class="zone'+(z?"":" srv")+'" data-a="sub" data-z="'+z+'">'+(z?"":"<u>SERVER</u>")+'<i>Zone '+Z[z]+'</i>'+esc(r.lu[z])+'</div>'}).join("")+'</div>'+
+ '<p class="dim" style="text-align:center">Tap a zone to substitute · Now in <b style="color:#fff">Rotation R'+(r.rn+1)+'</b> ('+sg(x.pf-x.pa)+' this set)</p>'+
+ '<div class="hub"><div class="big">'+r.us+'<small>US</small></div><div>'+
+ '<button class="bt sc'+(r.serving?" sv":"")+'" data-a="pt" data-u="1">US won the rally<br><small>'+(r.serving?"serving":"receiving")+'</small></button>'+
+ '<button class="bt sc'+(r.serving?"":" sv")+'" style="background:#e53e3e" data-a="pt" data-u="0">'+esc(L.opp)+' won the rally<br><small>'+(r.serving?"receiving":"serving")+'</small></button></div>'+
+ '<div class="big">'+r.th+'<small>'+esc(L.opp)+'</small></div></div>'+
+ '<div class="acts"><button class="bt r" data-a="undo">↺ Undo</button><button class="bt" data-a="next">Next set ➔</button><button class="bt p" data-a="end">End match</button></div></div>'}
+
+function drawerHTML(t){var L=t.live;if(!L||L.phase!=="play")return"";
+ return'<button class="tg" data-a="drw">📥 RECEIVERS</button><div class="dr"><div class="row"><h3 style="margin:0">Serve-receive passing</h3><button class="bt s" data-a="drw">✕</button></div><p class="dim">Rate each pass: 0 = aced, 3 = perfect.</p>'+
+ t.roster.map(function(p,i){var a=L.passes[p]||[];return'<div class="rc"><b>'+esc(p)+'</b> <span class="dim">avg '+(a.length?avg(a).toFixed(2):"0.00")+' ('+a.length+')</span><div class="rb">'+
+  [0,1,2,3].map(function(n){return'<button style="background:'+["#e74c3c","#e67e22","#b8860b","#2ecc71"][n]+'" data-a="pass" data-i="'+i+'" data-n="'+n+'">'+n+'</button>'}).join("")+
+  '<button style="background:#4a5568" data-a="unpass" data-i="'+i+'">↺</button></div></div>'}).join("")+'</div>'}
+
+function modalHTML(t){var m=V.modal;if(!m)return"";var b;
+ if(m.t==="c")b='<p>'+esc(m.text)+'</p><div class="row"><button class="bt r" data-a="no">Cancel</button><button class="bt" data-a="yes">Yes</button></div>';
+ else{var r=replay(t.live),bench=t.roster.filter(function(p){return r.lu.indexOf(p)<0});
+  b='<h3>Substitute in Zone '+Z[m.z]+'</h3><p class="dim">On court now: '+esc(r.lu[m.z])+'</p>'+
+  (bench.length?bench.map(function(p){return'<div class="bn" data-a="dosub" data-p="'+esc(p)+'">'+esc(p)+' ➔ in</div>'}).join(""):'<p class="dim">Bench is empty.</p>')+
+  '<label>New player not on the roster</label><input id="cs" placeholder="#15 Emma"><button class="bt o" style="margin-top:8px" data-a="csub">Substitute new player</button><button class="bt r" style="width:100%;margin-top:8px" data-a="no">Cancel</button>'}
+ return'<div class="ov"><div class="md">'+b+'</div></div>'}
+
+function render(){var t=T(),L=t.live,play=L&&L.phase==="play";
+ q("L").innerHTML=leftHTML(t);q("C").innerHTML=play?playHTML(t):setupHTML(t);q("R").innerHTML=rightHTML(t);
+ q("D").innerHTML=drawerHTML(t);q("D").className=V.drawer&&play?"open":"";q("M").innerHTML=modalHTML(t)}
+function ask(text,cb){V.modal={t:"c",text:text};V.pend=cb}
+function closeSet(L){var r=replay(L);L.sets.push({n:L.n,us:r.us,th:r.th,rot:r.rot});L.n++}
+function endMatch(t){var L=t.live;if(L.phase==="play"&&L.hist.some(isR))closeSet(L);
+ if(L.sets.length)t.archive.unshift({id:Date.now(),ts:Date.now(),opp:L.opp,sets:L.sets,passes:L.passes});
+ t.live=null;V.slots=["","","","","",""];save()}
+
+document.addEventListener("input",function(e){var i=e.target.id;if(i==="opp")V.opp=e.target.value;if(i==="sz")V.sz=+e.target.value;if(i==="rv")V.recv=e.target.value});
+document.addEventListener("change",function(e){if(e.target.id==="tm"){DB.active=e.target.value;V.slots=["","","","","",""];V.sel=null;V.opp=T().live?T().live.opp:"THEM";save();render()}});
+document.addEventListener("toggle",function(e){var k=e.target.dataset&&e.target.dataset.k;if(k)V.open[k]=e.target.open},true);
+document.addEventListener("click",function(e){var el=e.target.closest("[data-a]");if(!el)return;
+ var a=el.dataset.a,d=el.dataset,t=T(),L=t.live;
+ switch(a){
+ case"pick":V.sel=V.sel===d.p?null:d.p;break;
+ case"slot":var z=+d.z;if(V.sel){var j=V.slots.indexOf(V.sel);if(j>-1)V.slots[j]="";V.slots[z]=V.sel;V.sel=null}else V.slots[z]="";break;
+ case"addp":var v=q("np").value.trim();if(v&&t.roster.indexOf(v)<0){t.roster.push(v);save()}break;
+ case"delp":(function(i){ask("Remove "+t.roster[i]+" from the roster?",function(){var p=t.roster.splice(i,1)[0];V.slots=V.slots.map(function(s){return s===p?"":s});save()})})(+d.i);break;
+ case"addteam":var n=q("nt").value.trim();if(n){DB.active=n;T();V.slots=["","","","","",""];V.opp="THEM";save()}break;
+ case"start":if(V.slots.some(function(s){return!s})){V.msg="Place a player in all six zones first.";break}
+  V.msg="";var cfg={slots:V.slots.slice(),sz:V.sz,rs:SR.indexOf(V.sz),recv:V.recv==="1"},opp=V.opp.trim()||"THEM";
+  if(!L)L=t.live={n:1,sets:[],passes:{},hist:[],opp:opp};
+  L.opp=opp;L.cfg=cfg;L.hist=[];L.phase="play";save();break;
+ case"pt":L.hist.push({t:"r",u:d.u==="1"});save();break;
+ case"undo":L.hist.pop();save();break;
+ case"sub":V.modal={t:"s",z:+d.z};break;
+ case"dosub":L.hist.push({t:"s",z:V.modal.z,p:d.p});V.modal=null;save();break;
+ case"csub":var cv=q("cs").value.trim();if(!cv)break;if(t.roster.indexOf(cv)<0)t.roster.push(cv);L.hist.push({t:"s",z:V.modal.z,p:cv});V.modal=null;save();break;
+ case"pass":var pp=t.roster[+d.i];(L.passes[pp]=L.passes[pp]||[]).push(+d.n);save();break;
+ case"unpass":var pu=L.passes[t.roster[+d.i]];if(pu)pu.pop();save();break;
+ case"drw":V.drawer=!V.drawer;break;
+ case"next":var go=function(){if(L.hist.some(isR))closeSet(L);V.slots=L.cfg.slots.slice();V.sz=L.cfg.sz;V.recv=L.cfg.recv?"0":"1";V.opp=L.opp;V.drawer=false;L.hist=[];L.phase="setup";save()};
+  if(L.hist.some(isR))go();else ask("No rallies recorded in this set. Go back to setup anyway?",go);break;
+ case"end":ask("End the match and save it to the archive and season totals?",function(){endMatch(t);V.drawer=false});break;
+ case"exit":ask("Discard this match? Nothing will be saved.",function(){t.live=null;V.drawer=false;save()});break;
+ case"ign":var am=t.archive[+d.i];if(am){am.ignored=!am.ignored;save()}break;
+ case"delm":(function(i){ask("Delete this match? It will also leave the season totals.",function(){t.archive.splice(i,1);save()})})(+d.i);break;
+ case"yes":var f=V.pend;V.modal=null;V.pend=null;if(f)f();break;
+ case"no":V.modal=null;V.pend=null;break}
+ render()});
+if(T().live)V.opp=T().live.opp;
+render();
+</script></body></html>
